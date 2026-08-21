@@ -1,0 +1,21 @@
+{
+  "title": "Verify Product Demo",
+  "scene": [
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786705094986/scene-0.png",
+      "narrate": "You're a developer verifying speech-to-text integration across multilingual servers"
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786705094986/screen.png",
+      "narrate": "Navigating to verification dashboard"
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786705094986/screen.png",
+      "narrate": "Testing speech-to-text verification flow"
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786705094986/screen.png",
+      "narrate": "Viewing architecture with STT/TTS server dependencies"
+    }
+  ]
+}

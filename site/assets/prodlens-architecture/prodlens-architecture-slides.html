@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>prodlens architecture</title>
+<style>
+:root { --bg:#0b0d10; --fg:#e8e8e8; --muted:#9aa0a6; --panel:#16181d; --border:#262a31; --accent:#60a5fa; --green:#22c55e; --red:#ef4444; --amber:#f59e0b; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","SF Pro Display",sans-serif; background:var(--bg); color:var(--fg); }
+.slide { width:1400px; height:785px; padding:56px 64px; background:var(--bg); border-bottom:1px solid var(--border); }
+.kicker { color:var(--accent); text-transform:uppercase; letter-spacing:0.12em; font-size:13px; font-weight:600; margin-bottom:10px; }
+h1 { font-size:40px; margin:0 0 18px; letter-spacing:-0.02em; line-height:1.1; }
+h2 { font-size:26px; margin:0 0 6px; letter-spacing:-0.01em; }
+.sub { color:var(--muted); font-size:16px; line-height:1.55; max-width:1100px; }
+.flow { display:flex; gap:14px; margin-top:40px; }
+.b { flex:1; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; min-height:120px; }
+.b .t { font-weight:600; font-size:16px; margin-bottom:6px; }
+.b .d { color:var(--muted); font-size:13px; line-height:1.5; }
+.arrow { align-self:center; color:var(--accent); font-size:24px; font-weight:700; flex:0 0 auto; }
+.row { display:flex; gap:14px; margin-top:32px; }
+.leg { display:flex; gap:18px; margin-top:20px; color:var(--muted); font-size:13px; }
+.dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; }
+.ok { background:var(--green); } .warn { background:var(--amber); } .bad { background:var(--red); } .accent { background:var(--accent); }
+.graphic { display:flex; align-items:flex-end; gap:8px; height:340px; margin-top:36px; }
+.node { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 16px; font-size:13px; color:var(--muted); }
+.node b { color:var(--fg); }
+.node.found { border-color:var(--border); } .node.broken { border-color:var(--red); } .node.miss { border-color:var(--amber); }
+code { background:var(--panel); border:1px solid var(--border); padding:2px 6px; border-radius:4px; font-size:12.5px; }
+.pipe { display:flex; flex-direction:column; gap:10px; margin-top:36px; }
+.stage { display:flex; align-items:center; gap:14px; }
+.stage .name { width:170px; font-weight:600; }
+.stage .desc { color:var(--muted); font-size:13.5px; flex:1; }
+.stage .n { color:var(--accent); font-weight:700; }
+.loop { margin-top:26px; border-top:1px dashed var(--border); padding-top:20px; color:var(--muted); font-size:14px; }
+.version { display:flex; gap:14px; margin-top:36px; align-items:stretch; }
+.v { flex:1; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
+.v .k { font-size:12px; color:var(--accent); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:12px; }
+.v .t { font-weight:600; margin-bottom:6px; }
+.v .d { color:var(--muted); font-size:13px; line-height:1.5; }
+.tags { margin-top:22px; display:flex; gap:10px; flex-wrap:wrap; }
+.tag { background:#0f172a; color:var(--accent); border:1px solid #1e3a5f; border-radius:999px; padding:5px 14px; font-size:13px; }
+.bigline { font-size:20px; margin-top:30px; color:var(--fg); line-height:1.5; }
+.bigline b { color:var(--accent); }
+.muted { color:var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="slide" id="why">
+  <div class="kicker">Why it exists</div>
+  <h1>Vibe-coded UIs quietly rot</h1>
+  <p class="sub">A button renders but does nothing. A link points at a route that no longer exists. A screen was designed but never wired into navigation. Normal dev loops check <em>"does this one flow work"</em> - nothing checks <em>"is every edge functional across the whole graph."</em> That gap is exactly what this tool tests.</p>
+  <div class="row">
+    <div class="b"><div class="t"><span class="dot bad"></span>Dead button</div><div class="d">onClick wired to nothing, or a server action never imported into the page.</div></div>
+    <div class="b"><div class="t"><span class="dot warn"></span>Broken link</div><div class="d">Href targets a route that was renamed or deleted after a refactor.</div></div>
+    <div class="b"><div class="t"><span class="dot warn"></span>Unreachable screen</div><div class="d">A page exists in the router but no edge in the app navigates to it.</div></div>
+  </div>
+  <p class="bigline">Built for apps where <b>changes move fast</b> and checking every screen by hand is impossible.</p>
+</div>
+
+<div class="slide" id="model">
+  <div class="kicker">The core model</div>
+  <h1>Your UI, as a graph</h1>
+  <p class="sub">Screens are <b>nodes</b>, transitions are <b>edges</b>. Everything downstream - prioritization, execution, reporting - operates on this graph, so a finding is always grounded in a real screen + real interaction.</p>
+  <div class="flow">
+    <div class="b"><div class="t">Node</div><div class="d">A screen: a route pattern like <code>/[project]/studio</code>, carrying its URL and a state signature.</div></div>
+    <div class="arrow">-&gt;</div>
+    <div class="b"><div class="t">Edge</div><div class="d">An action that goes somewhere: <code>click "Save"</code>, a link, a navigation. Status: working / broken / untested.</div></div>
+    <div class="arrow">-&gt;</div>
+    <div class="b"><div class="t">Finding</div><div class="d">Unreachable screens, dead ends, missing return paths, broken edges, dead elements - each tied back to its node.</div></div>
+  </div>
+  <div class="leg">
+    <span><span class="dot ok"></span>working edge</span>
+    <span><span class="dot bad"></span>broken edge</span>
+    <span><span class="dot warn"></span>unreachable / dead end</span>
+  </div>
+</div>
+
+<div class="slide" id="passes">
+  <div class="kicker">Discovery: two complementary passes</div>
+  <h1>No browser, then a browser</h1>
+  <div class="flow">
+    <div class="b"><div class="t">1. Static pass - ts-morph</div><div class="d">Parses the app <em>source</em>. No browser, no server, no flakiness. Builds the route inventory and classifies every interactive element: <code>navigates</code>, <code>server-action</code>, <code>local-state</code>, or <code>dead</code>.</div></div>
+    <div class="arrow">+</div>
+    <div class="b"><div class="t">2. Live crawl - Playwright</div><div class="d">BFS from entry points, reads the <em>real rendered</em> hrefs (resolves template literals and runtime redirects), clicks buttons, records what actually happens. Authenticates once, caches the session.</div></div>
+  </div>
+  <div class="legend" style="margin-top:34px">
+    <div class="b" style="min-height:80px"><div class="t">Why two</div><div class="d">Static finds what the code <em>looks like</em> it does in seconds. Live confirms what it <em>actually does</em>. Merged together, they beat either alone.</div></div>
+  </div>
+</div>
+
+<div class="slide" id="merge">
+  <div class="kicker">Merge &amp; analyze</div>
+  <h1>One graph, one verdict per screen</h1>
+  <p class="sub">The two passes merge into a single graph that is <b>versioned</b> (<code>GraphVersion</code>). Route matching is specificity-aware: <code>/[project]/studio/new</code> wins over <code>/[project]/studio/[id]</code> because its literal segments outnumber them.</p>
+  <div class="flow">
+    <div class="b"><div class="t">Unreachable</div><div class="d">No incoming edge from any live click.</div></div>
+    <div class="b"><div class="t">Dead end</div><div class="d">No outgoing edges after it.</div></div>
+    <div class="b"><div class="t">Missing return</div><div class="d">Forward nav works, but nothing navigates back.</div></div>
+    <div class="b"><div class="t">Broken edge</div><div class="d">Action ran in a browser; page did not navigate.</div></div>
+  </div>
+</div>
+
+<div class="slide" id="prioritize">
+  <div class="kicker">Prioritization engine</div>
+  <h1>Personas and journeys that matter</h1>
+  <p class="sub">From the recovered graph, the synthesis engine infers <b>personas</b> and proposes <b>prioritized journeys</b>. Every step in a journey is grounded in a real edge (found by BFS to the target), never free text - so execution can replay it deterministically.</p>
+  <div class="flow">
+    <div class="b"><div class="t">Personas</div><div class="d">Who uses the app: new visitor, returning customer, power user. LLM-inferred with <code>ANTHROPIC_API_KEY</code>, heuristic fallback otherwise.</div></div>
+    <div class="b"><div class="t">Journeys</div><div class="d">Critical paths per persona: signup, onboarding, core value loop - ranked by risk.</div></div>
+    <div class="b"><div class="t">Grounded steps</div><div class="d">Each step = a real graph edge + (where a form exists) a heuristic <code>InputScenario</code> to fill first.</div></div>
+  </div>
+  <div class="leg"><span><span class="dot accent"></span>offline learning loop (GEPA) feeds prior run feedback into the next plan</span></div>
+</div>
+
+<div class="slide" id="execute">
+  <div class="kicker">Execution engine</div>
+  <h1>Replays the plan, records reality</h1>
+  <div class="pipe">
+    <div class="stage"><span class="n">01</span><span class="name">review</span><span class="desc">Manual gate: approve, reject, or edit each journey before it runs.</span></div>
+    <div class="stage"><span class="n">02</span><span class="name">run</span><span class="desc">Bounded-concurrency Playwright workers replay approved paths against the live app.</span></div>
+    <div class="stage"><span class="n">03</span><span class="name">forms</span><span class="desc">Detected input clusters are filled like a user before submit - disabled-until-valid is not misread as broken.</span></div>
+    <div class="stage"><span class="n">04</span><span class="name">agent fallback</span><span class="desc">A step the DOM can't resolve gets re-clicked by an LLM agent that picks the best-matching element.</span></div>
+  </div>
+  <div class="loop">The run emits its own <b>observed graph</b> alongside the intended one - that diff is the report.</div>
+</div>
+
+<div class="slide" id="report">
+  <div class="kicker">Report &amp; explore</div>
+  <h1>Diff intended vs actual</h1>
+  <p class="sub">The report compares the intended graph against what execution actually observed, ranks findings by severity, and appends run feedback for the learning loop. The explorer is a single self-contained <code>explorer.html</code> - no server, open it directly.</p>
+  <div class="version">
+    <div class="v"><div class="k">Intended</div><div class="t">The plan</div><div class="d">Graph + prioritized journeys, saved as a version before running.</div></div>
+    <div class="v"><div class="k">Actual</div><div class="t">What really happened</div><div class="d">Observed edges, pass/fail per step, screenshots, per-path videos.</div></div>
+    <div class="v"><div class="k">Diff</div><div class="t">The report</div><div class="d">Broken edges, missing return paths, dead ends - ranked by severity, exit code CI-friendly.</div></div>
+  </div>
+</div>
+
+<div class="slide" id="video">
+  <div class="kicker">Beyond the report</div>
+  <h1>Videos as first-class output</h1>
+  <p class="sub">Because a journey is a replayable path, it is also a video. The same pipeline that tests also demonstrates and documents.</p>
+  <div class="flow">
+    <div class="b"><div class="t">capture</div><div class="d">Replay any path in a real browser to a .webm, exactly as the test ran it.</div></div>
+    <div class="b"><div class="t">explain</div><div class="d">Screenplay JSON of stills + narration becomes a narrated MP4, voiced by Gemini TTS.</div></div>
+    <div class="b"><div class="t">demo</div><div class="d">Drive the live app through scripted steps, screenshot each, narrate each, assemble.</div></div>
+  </div>
+  <div class="tags"><span class="tag">Playwright recordVideo</span><span class="tag">ffmpeg concat</span><span class="tag">Gemini 2.5 Flash TTS</span></div>
+</div>
+
+</body>
+</html>

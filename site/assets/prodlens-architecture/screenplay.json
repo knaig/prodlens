@@ -1,0 +1,37 @@
+{
+  "title": "prodlens: architecture deep dive",
+  "scene": [
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/data/tmp-uft-slides/slide-why.png",
+      "narrate": "Why was this built? Vibe-coded UIs quietly rot. A button renders but does nothing. A link points at a route that no longer exists. A screen was designed but never wired into navigation. Normal dev loops check whether one flow works; nothing checks whether every edge is functional across the whole graph. That gap is exactly what this tool tests."
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/data/tmp-uft-slides/slide-model.png",
+      "narrate": "The core model is a graph. Screens become nodes, transitions become edges. Everything downstream, prioritization, execution, reporting, operates on this same graph, so every finding is grounded in a real screen and a real interaction."
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/data/tmp-uft-slides/slide-passes.png",
+      "narrate": "Discovery runs two complementary passes. First, a static pass parses the app source with ts-morph. No browser, no server, no flakiness. It builds the route inventory and classifies every interactive element as navigating, a server action, local state, or dead. Second, a live Playwright crawl BFS's from the entry points, reads the real rendered hrefs, clicks buttons, and records what actually happens."
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/data/tmp-uft-slides/slide-merge.png",
+      "narrate": "Then comes the interesting part: merge and analyze. The two passes merge into one graph that gets versioned. Route matching is specificity-aware, so a literal route pattern wins over a dynamic one when both could match. The analysis flags unreachable screens, dead ends, missing return paths, and broken edges."
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/data/tmp-uft-slides/slide-prioritize.png",
+      "narrate": "The prioritization engine turns that graph into a plan. It infers personas, then proposes prioritized journeys for each one. Every step in a journey is grounded in a real edge from the graph, found by breadth-first search to the target, never free text, so execution can replay it deterministically."
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/data/tmp-uft-slides/slide-execute.png",
+      "narrate": "Execution is a manual review gate followed by a replay. Bounded-concurrency Playwright workers run the approved journeys against the live app. Detected input clusters get filled like a user would, before submit, so a correctly disabled button is not misread as broken. And if a step's selector cannot be resolved, an LLM agent picks the best matching element and clicks it."
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/data/tmp-uft-slides/slide-report.png",
+      "narrate": "Every run emits its own observed graph alongside the intended one. The report diffs them, ranks findings by severity, and produces a CI-friendly exit code. The explorer is a single self-contained HTML file, no server, open it directly in a browser."
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/data/tmp-uft-slides/slide-video.png",
+      "narrate": "Finally, videos are first-class output, because a journey is a replayable path. Capture replays any path in a real browser to a WebM. Explain assembles a screenplay of stills with narration into an MP4, voiced by Gemini TTS. And demo drives the live app through scripted steps, narrating each one. The same pipeline that tests your app also documents it."
+    }
+  ]
+}

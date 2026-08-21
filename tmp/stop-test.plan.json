@@ -1,0 +1,182 @@
+{
+  "manifest": {
+    "baseUrl": "https://voicera.example.com",
+    "surfaces": {
+      "endpoints": {
+        "stt": {
+          "method": "POST",
+          "path": "/stt/upload",
+          "auth": "bearer"
+        },
+        "tts": {
+          "method": "POST",
+          "path": "/tts/generate",
+          "auth": "bearer"
+        }
+      }
+    },
+    "entry": "/"
+  },
+  "plan": {
+    "title": "Voicera Product Walkthrough: Speech to Text and Text to Speech Services",
+    "mode": [
+      "persona",
+      "ux",
+      "flow",
+      "architecture"
+    ],
+    "scenes": [
+      {
+        "name": "intro_persona",
+        "narrate": "A developer wants to integrate voice services into their app. They need accurate and efficient speech processing tools.",
+        "primitives": [
+          {
+            "op": "persona.set",
+            "args": {
+              "who": "Voice API Developer",
+              "problem": "Needs reliable speech-to-text and text-to-speech integration",
+              "goal": "Demonstrate core workflow and architecture"
+            }
+          }
+        ]
+      },
+      {
+        "name": "stt_server",
+        "narrate": "Navigate to the speech-to-text server dashboard",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/stt"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ],
+        "expect": {
+          "urlIncludes": "/stt"
+        }
+      },
+      {
+        "name": "stt_upload",
+        "narrate": "Upload an audio file for transcription",
+        "primitives": [
+          {
+            "op": "browser.click",
+            "args": {
+              "label": "Upload Audio"
+            }
+          },
+          {
+            "op": "browser.fill",
+            "args": {
+              "selector": "#audio-file",
+              "value": "test_audio.wav"
+            }
+          },
+          {
+            "op": "browser.type",
+            "args": {
+              "text": "test_audio.wav"
+            }
+          },
+          {
+            "op": "browser.click",
+            "args": {
+              "label": "Submit"
+            }
+          }
+        ],
+        "needs": [
+          {
+            "id": "audio_file",
+            "resource": "test_audio.wav",
+            "purpose": "Sample audio for transcription demo"
+          }
+        ],
+        "expect": {
+          "urlIncludes": "/stt/result/"
+        }
+      },
+      {
+        "name": "tts_server",
+        "narrate": "Generate speech from text using the TTS server",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/tts"
+            }
+          },
+          {
+            "op": "browser.fill",
+            "args": {
+              "selector": "#text-input",
+              "value": "Hello from Voicera"
+            }
+          },
+          {
+            "op": "browser.click",
+            "args": {
+              "label": "Convert to Speech"
+            }
+          }
+        ],
+        "expect": {
+          "urlIncludes": "/tts/result/"
+        }
+      },
+      {
+        "name": "core_flow",
+        "narrate": "Show the end-to-end voice processing workflow",
+        "primitives": [
+          {
+            "op": "http.call",
+            "args": {
+              "endpoint": "stt",
+              "body": {
+                "audio_url": "https://voicera.example.com/test_audio.wav"
+              }
+            }
+          },
+          {
+            "op": "http.call",
+            "args": {
+              "endpoint": "tts",
+              "body": {
+                "text": "Processed by Voicera's AI stack"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "system_arch",
+        "narrate": "View the architecture connecting all voice service components",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/docs/architecture"
+            }
+          },
+          {
+            "op": "browser.scroll",
+            "args": {
+              "direction": "down"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ],
+        "expect": {
+          "urlIncludes": "/docs/architecture"
+        }
+      }
+    ]
+  }
+}

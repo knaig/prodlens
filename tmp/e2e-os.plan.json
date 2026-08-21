@@ -1,0 +1,124 @@
+{
+  "manifest": {
+    "baseUrl": "http://localhost:3200",
+    "surfaces": {
+      "endpoints": {
+        "stt": {
+          "method": "POST",
+          "path": "/ai4bharat_stt_server/endpoint",
+          "auth": "bearer"
+        },
+        "tts": {
+          "method": "POST",
+          "path": "/ai4bharat_tts_server/endpoint",
+          "auth": "bearer"
+        },
+        "dashboard": {
+          "method": "GET",
+          "path": "/voicera_frontend/dashboard",
+          "auth": "session"
+        }
+      },
+      "baseUrl": "http://localhost:3200"
+    },
+    "entry": "/voicera_frontend"
+  },
+  "plan": {
+    "title": "VoiceEra: Open Voice AI Infrastructure for India",
+    "mode": [
+      "persona",
+      "ux",
+      "flow",
+      "architecture"
+    ],
+    "scenes": [
+      {
+        "name": "intro-developer",
+        "narrate": "A developer wants to build a multilingual voice assistant for Indian languages",
+        "primitives": [
+          {
+            "op": "persona.set",
+            "args": {
+              "who": "AI Product Developer",
+              "problem": "Need voice AI infrastructure for Indian languages",
+              "goal": "Build, deploy, and monitor voice assistants"
+            }
+          }
+        ]
+      },
+      {
+        "name": "dashboard-access",
+        "narrate": "Open VoiceEra dashboard to manage voice AI projects",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/voicera_frontend/dashboard"
+            }
+          },
+          {
+            "op": "browser.click",
+            "args": {
+              "label": "New Project"
+            }
+          }
+        ],
+        "expect": {
+          "urlIncludes": "/projects/new"
+        }
+      },
+      {
+        "name": "voice-flow",
+        "narrate": "Diagram shows voice input → STT → LLM → TTS → audio output pipeline",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/voicera_frontend/flow"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "name": "component-architecture",
+        "narrate": "System built with STT, TTS servers and LLM integration for voice workflows",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/docs/architecture"
+            }
+          },
+          {
+            "op": "browser.scroll",
+            "args": {
+              "direction": "down"
+            }
+          }
+        ]
+      },
+      {
+        "name": "monitoring-view",
+        "narrate": "View real-time metrics for voice assistant performance and errors",
+        "primitives": [
+          {
+            "op": "http.call",
+            "args": {
+              "endpoint": "stt",
+              "headers": {
+                "Authorization": "Bearer demo-token"
+              },
+              "body": {
+                "audio": "base64-voice-sample"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "title": "Voicera Product Demo",
+  "scene": [
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786703743425/persona-0.png",
+      "narrate": "Meet a developer integrating speech-to-text and text-to-speech APIs for multilingual applications."
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786703743425/scene-1.png",
+      "narrate": "Access the developer dashboard to manage API keys and service status"
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786703743425/screen.png",
+      "narrate": "View the microservices architecture with STT, TTS, and LLM components"
+    }
+  ]
+}

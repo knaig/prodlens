@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>prodlens - live UI flow testing</title>
+<style>
+:root { --bg:#0b0d10; --fg:#e8e8e8; --muted:#9aa0a6; --panel:#16181d; --border:#262a31; --accent:#60a5fa; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--fg); line-height:1.55; }
+.wrap { max-width:920px; margin:0 auto; padding:48px 24px; }
+h1 { font-size:30px; margin:0 0 8px; letter-spacing:-0.02em; }
+.sub { color:var(--muted); font-size:15px; margin-bottom:32px; }
+.tag { display:inline-block; background:#0f172a; color:var(--accent); border:1px solid #1e3a5f; border-radius:999px; padding:2px 12px; font-size:12px; margin-right:8px; margin-bottom:8px; }
+a { color:var(--accent); }
+.cta { display:inline-block; background:var(--accent); color:#08131f; font-weight:600; padding:10px 18px; border-radius:8px; text-decoration:none; font-size:14px; }
+.cta.secondary { background:var(--panel); color:var(--fg); border:1px solid var(--border); }
+.row { display:flex; gap:12px; flex-wrap:wrap; margin:24px 0; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
+.card h2 { margin:0 0 8px; font-size:16px; }
+.card p { margin:0; color:var(--muted); font-size:13.5px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin:24px 0; }
+code { background:var(--panel); border:1px solid var(--border); padding:2px 6px; border-radius:4px; font-size:12.5px; }
+pre { background:var(--panel); border:1px solid var(--border); padding:16px; border-radius:10px; overflow-x:auto; font-size:13px; }
+footer { color:var(--muted); font-size:12.5px; margin-top:48px; border-top:1px solid var(--border); padding-top:16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>prodlens</h1>
+  <p class="sub">Discovers a web app's UI as a graph of screens and transitions, prioritizes critical user journeys, executes them with Playwright, and reports broken edges, dead ends, and missing return paths.</p>
+  <span class="tag">Playwright</span><span class="tag">Clerk auth</span><span class="tag">LLM synthesis</span><span class="tag">ffmpeg video capture</span>
+
+  <div class="row">
+    <a class="cta" href="explorer.html">Open the live demo explorer</a>
+    <a class="cta secondary" href="https://github.com/knaig/prodlens">Source on GitHub</a>
+  </div>
+
+  <div class="card">
+    <h2>Why</h2>
+    <p>AI-assisted UIs accumulate a specific failure mode: buttons that render but do nothing, links to routes that no longer exist, screens nobody wired into navigation. Normal dev/test loops check "does this one flow work" - nothing checks "is every edge functional across the whole graph." This tool does.</p>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h2>Two discovery passes</h2><p>Static AST scan (no browser, no server) plus a live Playwright crawl that reads the real rendered DOM and clicks real elements.</p></div>
+    <div class="card"><h2>Form-aware execution</h2><p>Detects &lt;form&gt;-less input clusters by viewport, fills them like a user, and only then clicks submit - so disabled-until-valid buttons aren't misreported as broken.</p></div>
+    <div class="card"><h2>Video for every journey</h2><p>Replay any prioritized path to a .webm, assemble run screenshots into an MP4, or record the screen while you drive the explorer.</p></div>
+  </div>
+
+  <h1 style="font-size:22px; margin-top:40px">The demo</h1>
+  <p style="color:var(--muted); font-size:14px">Below is a live-crawled graph of <strong>lazy-dist</strong> (a Next.js app): 25 screens, plus the prioritized journeys and run results. The Projects tab in the explorer surfaces the reports, specs, screenshots, and journey videos in-tool.</p>
+
+  <h2 style="font-size:15px">Quick start</h2>
+  <pre>npm install
+npx playwright install chromium
+
+# static pass (no server)
+prodlens scan --app-dir /path/to/app/src/app --name my-app
+
+# full pipeline: discover -> prioritize -> run -> report
+prodlens full --base-url http://localhost:3000 --name my-app
+
+# record one journey as video
+prodlens capture --paths data/paths.json --graph data/versions/&lt;id&gt;.json --base-url http://localhost:3000</pre>
+
+  <h2 style="font-size:15px">Docs</h2>
+  <p style="color:var(--muted); font-size:14px">
+    <a href="../docs/architecture.md">Architecture</a> &middot;
+    <a href="../docs/cli-reference.md">CLI reference</a> &middot;
+    <a href="../docs/data-models.md">Data models</a> &middot;
+    <a href="../docs/llm-client.md">LLM client</a> &middot;
+    <a href="../docs/extension-guide.md">Extension guide</a> &middot;
+    <a href="../docs/voicera.md">VoiceEra example</a>
+  </p>
+
+  <footer>prodlens v0.1.0 &middot; generated explorer and demo data committed for static hosting &middot; LLM synthesis via OpenRouter (DeepSeek/Qwen/Kimi); a heuristic fallback is used when unset.</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "baseUrl": "http://localhost:3200",
+  "surfaces": {
+    "endpoints": {
+      "stt": {
+        "method": "POST",
+        "path": "/ai4bharat_stt_server",
+        "auth": "bearer"
+      },
+      "tts": {
+        "method": "POST",
+        "path": "/ai4bharat_tts_server",
+        "auth": "bearer"
+      }
+    },
+    "baseUrl": "http://localhost:3200"
+  },
+  "entry": "/"
+}

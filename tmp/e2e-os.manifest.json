@@ -1,0 +1,24 @@
+{
+  "baseUrl": "http://localhost:3200",
+  "surfaces": {
+    "endpoints": {
+      "stt": {
+        "method": "POST",
+        "path": "/ai4bharat_stt_server/endpoint",
+        "auth": "bearer"
+      },
+      "tts": {
+        "method": "POST",
+        "path": "/ai4bharat_tts_server/endpoint",
+        "auth": "bearer"
+      },
+      "dashboard": {
+        "method": "GET",
+        "path": "/voicera_frontend/dashboard",
+        "auth": "session"
+      }
+    },
+    "baseUrl": "http://localhost:3200"
+  },
+  "entry": "/voicera_frontend"
+}

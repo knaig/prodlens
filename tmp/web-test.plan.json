@@ -1,0 +1,113 @@
+{
+  "manifest": {
+    "baseUrl": "https://voicera.example.com",
+    "surfaces": {
+      "endpoints": {
+        "stt": {
+          "method": "POST",
+          "path": "/api/stt",
+          "auth": "bearer"
+        },
+        "tts": {
+          "method": "POST",
+          "path": "/api/tts",
+          "auth": "bearer"
+        }
+      }
+    },
+    "entry": "/"
+  },
+  "plan": {
+    "title": "Voicera Product Demo",
+    "mode": [
+      "persona",
+      "ux",
+      "flow",
+      "architecture"
+    ],
+    "scenes": [
+      {
+        "name": "persona-intro",
+        "narrate": "Meet a developer integrating speech-to-text and text-to-speech APIs for multilingual applications.",
+        "primitives": [
+          {
+            "op": "persona.set",
+            "args": {
+              "who": "Developer",
+              "problem": "Needs reliable speech processing APIs for regional languages",
+              "goal": "Integrate STT/TTS services with minimal latency"
+            }
+          }
+        ]
+      },
+      {
+        "name": "dashboard-view",
+        "narrate": "Access the developer dashboard to manage API keys and service status",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/developer"
+            }
+          },
+          {
+            "op": "browser.click",
+            "args": {
+              "label": "API Keys"
+            }
+          }
+        ],
+        "expect": {
+          "urlIncludes": "/api-keys"
+        }
+      },
+      {
+        "name": "core-flow",
+        "narrate": "Test the speech processing pipeline from audio input to text output",
+        "primitives": [
+          {
+            "op": "http.call",
+            "args": {
+              "endpoint": "stt",
+              "body": {
+                "audio": "base64_encoded_audio"
+              }
+            }
+          },
+          {
+            "op": "http.call",
+            "args": {
+              "endpoint": "tts",
+              "body": {
+                "text": "Processed text response"
+              }
+            }
+          }
+        ],
+        "needs": [
+          {
+            "id": "audio-sample",
+            "resource": "audio.wav",
+            "purpose": "Test speech-to-text endpoint"
+          }
+        ]
+      },
+      {
+        "name": "system-architecture",
+        "narrate": "View the microservices architecture with STT, TTS, and LLM components",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/docs/architecture"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ]
+      }
+    ]
+  }
+}

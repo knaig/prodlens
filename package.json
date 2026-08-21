@@ -1,0 +1,41 @@
+{
+  "name": "prodlens",
+  "version": "0.1.0",
+  "description": "Looks at a whole web product through one lens: recovers its UI as a graph of screens and transitions, verifies every edge (broken links, dead ends, unreachable screens), plans and executes the critical user journeys, and turns the same walkthrough into a narrated demo with a real cursor.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./adapters": "./dist/adapters/index.js"
+  },
+  "bin": {
+    "prodlens": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "discover": "tsx src/index.ts discover",
+    "prioritize": "tsx src/index.ts prioritize",
+    "review": "tsx src/index.ts review",
+    "run": "tsx src/index.ts run",
+    "report": "tsx src/index.ts report",
+    "explore": "tsx src/index.ts explore",
+    "gepa": "tsx src/index.ts gepa",
+    "full": "tsx src/index.ts full",
+    "test": "tsx --test $(find src -name '*.test.ts')",
+    "web": "tsx src/index.ts web --port 7788"
+  },
+  "dependencies": {
+    "@clerk/testing": "^1.4.13",
+    "commander": "^12.1.0",
+    "mermaid": "^11.16.1",
+    "playwright": "^1.48.2",
+    "ts-morph": "^24.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "dotenv": "^16.4.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

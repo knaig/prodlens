@@ -1,0 +1,125 @@
+{
+  "manifest": {
+    "baseUrl": "http://localhost:3200",
+    "surfaces": {
+      "endpoints": {
+        "stt": {
+          "method": "POST",
+          "path": "/ai4bharat_stt_server",
+          "auth": "bearer"
+        },
+        "tts": {
+          "method": "POST",
+          "path": "/ai4bharat_tts_server",
+          "auth": "bearer"
+        }
+      },
+      "baseUrl": "http://localhost:3200"
+    },
+    "entry": "/"
+  },
+  "plan": {
+    "title": "Verify Product Demo",
+    "mode": [
+      "persona",
+      "ux",
+      "flow",
+      "architecture"
+    ],
+    "scenes": [
+      {
+        "name": "intro",
+        "narrate": "You're a developer verifying speech-to-text integration across multilingual servers",
+        "primitives": [
+          {
+            "op": "persona.set",
+            "args": {
+              "who": "Developer",
+              "problem": "Need to validate STT/TTS server integrations",
+              "goal": "Verify end-to-end speech processing workflow"
+            }
+          }
+        ]
+      },
+      {
+        "name": "main-interface",
+        "narrate": "Navigating to verification dashboard",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/"
+            }
+          },
+          {
+            "op": "browser.click",
+            "args": {
+              "label": "ai4bharat_stt_server"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ],
+        "expect": {
+          "urlIncludes": "/ai4bharat_stt_server"
+        }
+      },
+      {
+        "name": "workflow",
+        "narrate": "Testing speech-to-text verification flow",
+        "primitives": [
+          {
+            "op": "http.call",
+            "args": {
+              "endpoint": "stt",
+              "body": {
+                "audio": "base64_encoded_audio"
+              }
+            }
+          },
+          {
+            "op": "browser.scroll",
+            "args": {
+              "direction": "down"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "name": "system-diagram",
+        "narrate": "Viewing architecture with STT/TTS server dependencies",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/docs/architecture"
+            }
+          },
+          {
+            "op": "browser.click",
+            "args": {
+              "label": "voice_2_voice_server"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ],
+        "needs": [
+          {
+            "id": "docker-compose",
+            "resource": "docker-compose.yml",
+            "purpose": "Verify server dependencies"
+          }
+        ]
+      }
+    ]
+  }
+}

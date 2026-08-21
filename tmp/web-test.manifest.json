@@ -1,0 +1,18 @@
+{
+  "baseUrl": "https://voicera.example.com",
+  "surfaces": {
+    "endpoints": {
+      "stt": {
+        "method": "POST",
+        "path": "/api/stt",
+        "auth": "bearer"
+      },
+      "tts": {
+        "method": "POST",
+        "path": "/api/tts",
+        "auth": "bearer"
+      }
+    }
+  },
+  "entry": "/"
+}

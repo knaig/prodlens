@@ -1,0 +1,21 @@
+{
+  "title": "Prodlens Product Demo",
+  "scene": [
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786703845689/persona-0.png",
+      "narrate": "You're a product manager analyzing a competitor's web app. Goal: map their architecture and core flow."
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786703845689/screen.png",
+      "narrate": "Start at Prodlens dashboard - the entry point for new analyses"
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786703845689/screen.png",
+      "narrate": "Submit a target URL to generate its architecture map"
+    },
+    {
+      "png": "/Users/karthiknaig/Projects/ux-flow-tester/tmp/.walk-1786703845689/screen.png",
+      "narrate": "View discovered components and their dependencies"
+    }
+  ]
+}

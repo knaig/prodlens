@@ -1,0 +1,13 @@
+{
+  "baseUrl": "https://app.prodlens.io",
+  "surfaces": {
+    "endpoints": {
+      "analyze": {
+        "method": "POST",
+        "path": "/api/v1/analyze",
+        "auth": "apiKey"
+      }
+    }
+  },
+  "entry": "/"
+}

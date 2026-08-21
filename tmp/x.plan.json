@@ -1,0 +1,121 @@
+{
+  "manifest": {
+    "baseUrl": "https://app.prodlens.io",
+    "surfaces": {
+      "endpoints": {
+        "analyze": {
+          "method": "POST",
+          "path": "/api/v1/analyze",
+          "auth": "apiKey"
+        }
+      }
+    },
+    "entry": "/"
+  },
+  "plan": {
+    "title": "Prodlens Product Demo",
+    "mode": [
+      "persona",
+      "ux",
+      "flow",
+      "architecture",
+      "http"
+    ],
+    "scenes": [
+      {
+        "name": "persona.intro",
+        "narrate": "You're a product manager analyzing a competitor's web app. Goal: map their architecture and core flow.",
+        "primitives": [
+          {
+            "op": "persona.set",
+            "args": {
+              "name": "Product Analyst",
+              "problem": "Manual app analysis is time-consuming",
+              "goal": "Automate architecture discovery and flow mapping"
+            }
+          }
+        ]
+      },
+      {
+        "name": "homepage",
+        "narrate": "Start at Prodlens dashboard - the entry point for new analyses",
+        "primitives": [
+          {
+            "op": "browser.goto",
+            "args": {
+              "path": "/"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "name": "core_flow",
+        "narrate": "Submit a target URL to generate its architecture map",
+        "primitives": [
+          {
+            "op": "browser.fill",
+            "args": {
+              "selector": "#url-input",
+              "value": "https://example-competitor.com"
+            }
+          },
+          {
+            "op": "browser.click",
+            "args": {
+              "label": "Analyze"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ],
+        "expect": {
+          "urlIncludes": "/analysis/12345"
+        }
+      },
+      {
+        "name": "architecture_view",
+        "narrate": "View discovered components and their dependencies",
+        "primitives": [
+          {
+            "op": "browser.click",
+            "args": {
+              "label": "Architecture Diagram"
+            }
+          },
+          {
+            "op": "browser.screenshot",
+            "args": {}
+          }
+        ]
+      },
+      {
+        "name": "api_demo",
+        "narrate": "Use the Prodlens API to retrieve analysis data programmatically",
+        "primitives": [
+          {
+            "op": "http.call",
+            "args": {
+              "endpoint": "analyze",
+              "body": {
+                "url": "https://example-competitor.com"
+              }
+            }
+          }
+        ],
+        "needs": [
+          {
+            "id": "api_key",
+            "resource": "API key",
+            "purpose": "Authenticate API requests"
+          }
+        ]
+      }
+    ]
+  }
+}

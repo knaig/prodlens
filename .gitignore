@@ -1,0 +1,24 @@
+node_modules/
+dist/
+data/graph.json
+data/prioritized-paths.json
+data/reports/
+data/storage-state/
+# per-project outputs: keep the project tree (videos, screenshots, reports,
+# screenplay, specs) but never the cached auth sessions. data/projects/<app>/
+# is the ONE canonical artifact home per target app.
+data/projects/*/discovery/storage-state/
+data/projects/*/captures/storage-state/
+data/projects/*/demos/*/storage-state/
+data/projects/*/storage-state/
+data/projects/*/auth/
+.env
+.env.local
+*.log
+.DS_Store
+
+# runtime artifacts + secrets (never publish)
+data/
+.env
+ui/app/node_modules/
+ui/app/dist/

@@ -1,0 +1,22 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3200",
+      "localStorage": [
+        {
+          "name": "org_id",
+          "value": "8baa18"
+        },
+        {
+          "name": "email",
+          "value": "uft-demo-1786594772@example.com"
+        },
+        {
+          "name": "access_token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1ZnQtZGVtby0xNzg2NTk0NzcyQGV4YW1wbGUuY29tIiwib3JnX2lkIjoiOGJhYTE4IiwiZW1haWwiOiJ1ZnQtZGVtby0xNzg2NTk0NzcyQGV4YW1wbGUuY29tIiwiaXNfbWVtYmVyIjpmYWxzZSwiZXhwIjoxNzg2NzA4OTM1LCJpYXQiOjE3ODY3MDcxMzV9.sIaft2Sel_CS2er05VosYd5-5TYI7BsId-USEx8uayU"
+        }
+      ]
+    }
+  ]
+}
