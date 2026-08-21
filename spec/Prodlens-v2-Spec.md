@@ -494,7 +494,54 @@ addressing/animation; summary tier may keep mermaid, but sequence and
 tutorial-tier diagrams get a prodlens-owned SVG renderer over respec data
 (stable ids, layout sidecar by construction).
 
-### 5.4 Vision dependency
+### 5.4 Diagrams v3: event-log projection architecture (adopted brief, 2026-08-21)
+
+Supersedes the v2 renderer internals (5.2/5.3 remain the product behavior;
+this is how they are built from here on). Core principle: **every diagram is
+a view over an event log we already produce** (choreography tracks, respec
+flows, crawler/executor logs, judge outcomes) - the renderer projects the
+log; it never hand-authors a picture and animates a camera over it.
+
+- **Module**: `diagrams/` - shared schema (`TraceEvent {t, from, to, label,
+  narration?, judgeScore?, meta}` + `Actor {id, displayName, role}` for
+  time-based views; a distinct `StaticGraph {nodes, edges}` for timeless
+  views - never fake `t:0` onto static data).
+- **Five renderers, routed by data shape, kept separate**: structural
+  (static system map - no camera pans, no glow-on-a-timer; too many nodes =
+  split the view), sequence (one run's messages: fixed lifelines, arrows
+  that DRAW along their path with the arrowhead revealed only after the line
+  completes; judge-score badges), state-machine (aggregate over many runs:
+  transition frequency edge weights), deployment (static nested containers
+  with the trust/egress boundary explicit), activity/flowchart (pipeline
+  stages + gates - not actors, so never forced into a sequence diagram).
+- **Layout**: elkjs for every node/edge diagram; box sizes measured from
+  text (kills the truncation bug). No hand-placed coordinates, no
+  force-directed second engine.
+- **Render shell**: Remotion - one React component tree is BOTH the
+  scrubbable interactive artifact (@remotion/player / Studio timeline) and
+  the exported MP4, so the verification artifact and the narrated demo are
+  provably the same run. interpolate()/spring() easing.
+- **Playback**: every time-based diagram gets a scrubber (step backward is a
+  review requirement); autoplay is a convenience on top, never the only
+  interface.
+- **Narration**: pluggable TTS provider interface; concrete provider is the
+  existing Gemini styled multi-voice cast (per-actor voices - persona/agent/
+  judge/component each keep their own voice; style prompts preserved).
+  `narration` is authored separately from `label` (never read the terse
+  label aloud). Audio pre-generated per event; measured durations drive
+  per-step timing (no fixed timers). Browser speechSynthesis: prototyping
+  only, never in the export path.
+- **Captions**: every narrated step renders its spoken text on screen,
+  synced to the audio (accessibility + sound-off viewing).
+- **Non-goals**: no auto-selection of diagram type from free text (callers
+  choose the renderer), no physics layout, no camera moves on static views.
+- **Build order**: schema+elk+structural (fix truncation) -> sequence
+  against a hand-written fixture (lifelines, draw-anim, scrubber) ->
+  narration+captions -> Remotion export parity -> real data (respec flows /
+  choreography / run logs as TraceEvent[]) -> deployment+activity ->
+  state-machine aggregate (needs many traces).
+
+### 5.5 Vision dependency
 
 Diagram narration tone, what to emphasize, and what to omit come from
 `vision.md` (gate 1). No vision -> engine still works but narrates neutrally;
@@ -721,7 +768,7 @@ Unit economics (from ledger estimates): QA run ~$0.16 COGS, narrated video
 
 ### 12.4 Hosted-gap checklist (not yet built)
 
-Accounts/orgs/seats + auth; Stripe billing wired to the ledger's summaries;
+Accounts/orgs/seats + auth; Razorpay billing (subscriptions/payment links, INR-first with UPI; webhook-driven plan activation) wired to the ledger's summaries;
 artifact object storage + CDN; runner protocol (wss job lease, heartbeat,
 artifact upload); org-facing usage page (the admin page today is
 operator-facing); quota enforcement per tier (cap enforcement exists,
