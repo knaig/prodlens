@@ -77,15 +77,23 @@ async function executeJob(cloud: string, headers: Record<string, string>, token:
     if (job.target.email || job.target.password) setSecrets(projectId, { email: job.target.email, password: job.target.password });
 
     const summary: Record<string, unknown> = {};
+    const stage = async (name: Parameters<typeof runStage>[1]) => {
+      buf.push(`[stage] ${name} starting`);
+      const r = await runStage(project, name);
+      Object.assign(summary, r.summary);
+      buf.push(`[stage] ${name} done: ${JSON.stringify(r.summary).slice(0, 200)}`);
+    };
     await runCaptured(async () => {
-      if (job.kind === "discover" || job.kind === "full") Object.assign(summary, (await runStage(project, "discover")).summary);
-      if (job.kind === "respec") Object.assign(summary, (await runStage(project, "respec")).summary);
+      if (job.kind === "discover" || job.kind === "full") await stage("discover");
+      if (job.kind === "respec") await stage("respec");
       if (job.kind === "full") {
-        Object.assign(summary, (await runStage(project, "prioritize")).summary);
+        await stage("prioritize");
         // Cloud jobs are headless - auto-approve (the review gate lives in the dashboard for interactive runs).
-        reviewPaths(project, { approve: getPaths(project).map((p) => p.id) });
-        Object.assign(summary, (await runStage(project, "run")).summary);
-        Object.assign(summary, (await runStage(project, "report")).summary);
+        const approved = getPaths(project).map((p) => p.id);
+        reviewPaths(project, { approve: approved });
+        buf.push(`[stage] review auto-approved ${approved.length} journey(s) (headless job)`);
+        await stage("run");
+        await stage("report");
       }
     }, (line) => buf.push(line));
 
