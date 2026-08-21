@@ -16,9 +16,3 @@ data/projects/*/auth/
 .env.local
 *.log
 .DS_Store
-
-# runtime artifacts + secrets (never publish)
-data/
-.env
-ui/app/node_modules/
-ui/app/dist/

@@ -688,6 +688,18 @@ program
   });
 
 program
+  .command("runner")
+  .description("Connect this machine to the ProdLens cloud as a runner: polls for jobs, executes them locally (your credentials and network stay here), streams logs + uploads artifacts.")
+  .requiredOption("--token <token>", "runner token from the cloud dashboard (Enroll runner)")
+  .option("--cloud <url>", "control plane URL", "https://prodlens-cloud.vercel.app")
+  .option("--once", "claim and run at most one job, then exit (CI mode)", false)
+  .option("--poll <ms>", "poll interval", "5000")
+  .action(async (opts) => {
+    const { runAgent } = await import("./runner/agent.js");
+    await runAgent({ cloudUrl: opts.cloud, token: opts.token, once: opts.once, pollMs: Number(opts.poll) });
+  });
+
+program
   .command("gepa")
   .description("GEPA offline reflection: distills accumulated TraceFeedback (from 'report' runs) into guidance the next 'prioritize' run applies")
   .option("--out <dir>", "output directory (where traces.json lives)", "./data")
