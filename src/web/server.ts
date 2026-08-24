@@ -900,13 +900,32 @@ export function startWebServer(opts: WebOptions = {}): { port: number; close: ()
     sendJson(res, 404, { error: "not found" });
   });
 
-  const port = opts.port ?? 7788;
-  server.listen(port, () => {
-    console.log(`prodlens web app -> http://localhost:${port}`);
-  });
+  // Auto-pick a free port on conflict (spec UX: a first-run install.sh user
+  // shouldn't have to know what's occupying their default port, or manually
+  // pass --port - same pattern as Vite/CRA's dev server).
+  const requested = opts.port ?? 7788;
+  const maxTries = 20;
+  const tryListen = (port: number, attempt: number) => {
+    const onError = (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE" && attempt < maxTries) {
+        tryListen(port + 1, attempt + 1);
+      } else {
+        throw err;
+      }
+    };
+    server.once("error", onError);
+    server.listen(port, () => {
+      server.removeListener("error", onError);
+      boundPort = port;
+      const note = port !== requested ? ` (port ${requested} was busy)` : "";
+      console.log(`prodlens web app -> http://localhost:${port}${note}`);
+    });
+  };
+  let boundPort = requested;
+  tryListen(requested, 0);
 
   return {
-    port,
+    get port() { return boundPort; },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }

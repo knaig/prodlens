@@ -662,8 +662,9 @@ program
   .option("-p, --port <n>", "port to listen on", "7788")
   .action(async (opts) => {
     const { startWebServer } = await import("./web/server.js");
-    const server = startWebServer({ port: Number(opts.port) });
-    console.log(`\n  Open: http://localhost:${server.port}\n`);
+    startWebServer({ port: Number(opts.port) });
+    // startWebServer logs the actual bound URL once listening (it may pick
+    // a different port than requested if the requested one is busy).
     // Keep the process alive.
     await new Promise(() => {});
   });
