@@ -5,7 +5,7 @@
 // renderer; diagram scenes render on the animated SVG engine; segments concat.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { renderProductDemo, type DemoScript, type DemoStep } from "../execution/demo.js";
+import { renderProductDemo, type DemoScreenplay, type DemoScript, type DemoStep } from "../execution/demo.js";
 import { probeDuration } from "../execution/explain.js";
 import type { Respec } from "../respec/respec.js";
 import { renderDiagramScene, renderSequenceScene } from "./diagram.js";
@@ -263,21 +263,31 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
     });
     if (result.error) log(`[studio] segment ${si} finished with note: ${result.error}`);
     parts.push(inputs.draft && result.silentVideoPath ? result.silentVideoPath : result.videoPath);
-    // Browser choreography from the emitted screenplay.
+    // Browser choreography, projected from the emitted screenplay. The field
+    // names must match DemoScreenplay exactly: `scene` (singular), `atSec`,
+    // `narrate`. They did not, so every browser segment produced an empty
+    // choreography.json - and because the failure was a silently swallowed
+    // mismatch rather than an error, the render still reported success while
+    // the spec's "render contract" (§4) was an empty array on disk.
     if (result.screenplayPath && existsSync(result.screenplayPath)) {
       try {
-        const sp = JSON.parse(readFileSync(result.screenplayPath, "utf-8")) as { scenes?: Array<{ name?: string; startSec?: number; durSec?: number; narration?: string }> };
-        for (const sc of sp.scenes ?? []) {
+        const sp = JSON.parse(readFileSync(result.screenplayPath, "utf-8")) as DemoScreenplay;
+        if (!sp.scene?.length) log(`[studio] segment ${si}: screenplay had no scenes - choreography will be empty`);
+        for (const sc of sp.scene ?? []) {
           choreographies.push({
-            sceneId: sc.name ?? `seg-${si}`,
+            sceneId: sc.name,
             durationSec: sc.durSec ?? 0,
             tracks: {
-              narration: sc.narration ? [{ at: sc.startSec ?? 0, lineId: sc.name ?? "", dur: sc.durSec ?? 0, text: sc.narration }] : [],
+              narration: sc.narrate ? [{ at: sc.atSec ?? 0, lineId: sc.name, dur: sc.durSec ?? 0, text: sc.narrate }] : [],
               cursor: [], animation: [], camera: [],
             },
           });
         }
-      } catch { /* screenplay shape drifted - non-fatal */ }
+      } catch (e) {
+        // Still non-fatal - a video without choreography beats no video - but
+        // never silent again.
+        log(`[studio] segment ${si}: could not read screenplay for choreography: ${e instanceof Error ? e.message : e}`);
+      }
     }
   }
 
