@@ -1,3 +1,4 @@
+// Spec: v2 §4 (PM1) - see spec/traceability.md
 // Real OS cursor driver for demos. When recording a product walkthrough with
 // `--os-cursor`, the actual mouse pointer is moved and clicked on the real
 // screen via cliclick (macOS), and the video is the recorded screen (see
@@ -43,6 +44,24 @@ export function addCursorOverlay(context: import("playwright").BrowserContext): 
     const w = window;
     if (w.__prodlensCursor) return;
     const src = ${JSON.stringify(svg)};
+    // The overlay is re-injected on every navigation, so its position has to
+    // survive one. Without this it reset to 0,0 and the pointer sat in the
+    // top-left corner after each goto, then teleported to the next target -
+    // the "jumping cursor" in recordings. sessionStorage carries it across
+    // same-origin navigations; the browser's own mouse position is unchanged,
+    // so restoring here just re-syncs the drawing to reality.
+    const KEY = "__prodlensCursorPos";
+    const readPos = () => {
+      try {
+        const raw = sessionStorage.getItem(KEY);
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        return (typeof p.x === "number" && typeof p.y === "number") ? p : null;
+      } catch (e) { return null; }
+    };
+    const savePos = (x, y) => {
+      try { sessionStorage.setItem(KEY, JSON.stringify({ x: x, y: y })); } catch (e) {}
+    };
     const inject = () => {
       if (w.__prodlensCursor) return;
       if (!document.documentElement) return;
@@ -50,10 +69,14 @@ export function addCursorOverlay(context: import("playwright").BrowserContext): 
       const el = document.createElement("img");
       el.id = "prodlens-cursor";
       el.src = src;
+      // Start where the pointer actually is. Falling back to the viewport
+      // centre rather than 0,0 matters for scenes that only navigate: they
+      // never emit a mousemove, so the corner is where it would stay.
+      const start = readPos() || { x: Math.round(w.innerWidth / 2), y: Math.round(w.innerHeight / 2) };
       Object.assign(el.style, {
         position: "fixed",
-        left: "0px",
-        top: "0px",
+        left: start.x + "px",
+        top: start.y + "px",
         width: "22px",
         height: "22px",
         pointerEvents: "none",
@@ -64,7 +87,9 @@ export function addCursorOverlay(context: import("playwright").BrowserContext): 
       const place = (x, y) => {
         el.style.left = x + "px";
         el.style.top = y + "px";
+        savePos(x, y);
       };
+      w.__prodlensPlaceCursor = place;
       document.addEventListener("mousemove", (e) => place(e.clientX, e.clientY));
       document.addEventListener("mousedown", () => {
         el.style.transform = "translate(0px, 0px)";

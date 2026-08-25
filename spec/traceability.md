@@ -272,6 +272,10 @@ Modules carrying a spec anchor in their header comment. This is the
 | `src/adapters/session-dom-adapter.test.ts` | v2 §4.3 |
 | `src/adapters/voicera-adapter.test.ts` | v2 §4.3, §9 V2 |
 | `src/execution/demo.test.ts` | v2 §4.3 |
+| `src/llm/tts-cache.ts` | v2 §4.4, §12.2 |
+| `src/llm/tts-cache.test.ts` | v2 §4.4 |
+| `src/execution/os-cursor.ts` | v2 §4 (PM1) |
+| `src/execution/os-cursor.test.ts` | v2 §4 (PM1) |
 | `src/graph/analysis.ts` | `FR-VE-4`, `FR-GE-3` |
 | `src/graph/graph-store.ts` | `FR-GE-1`, `FR-GE-2`, `FR-GE-3` |
 | `src/graph/route-match.ts` | `FR-GE-2` |

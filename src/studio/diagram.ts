@@ -5,7 +5,8 @@
 // timeline whose times come from the pre-synthesized narration clip durations.
 // Choreography is emitted alongside the MP4 (spec §4: the render contract).
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { addCursorOverlay } from "../execution/os-cursor.js";
 import { probeDuration } from "../execution/explain.js";
@@ -291,7 +292,7 @@ export async function renderDiagramScene(opts: {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 }, recordVideo: { dir: opts.staging, size: { width: 1440, height: 860 } } });
   await addCursorOverlay(ctx);
   const page = await ctx.newPage();
-  await page.goto("file://" + pagePath);
+  await page.goto(pathToFileURL(resolve(pagePath)).href);
   await page.waitForTimeout(400);
 
   const choreography: SceneChoreography = {
@@ -510,7 +511,7 @@ export async function renderSequenceScene(opts: {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 }, recordVideo: { dir: opts.staging, size: { width: 1440, height: 860 } } });
   await addCursorOverlay(ctx);
   const page = await ctx.newPage();
-  await page.goto("file://" + pagePath);
+  await page.goto(pathToFileURL(resolve(pagePath)).href);
   await page.waitForTimeout(400);
 
   const TOP = 120, ROW = 74;

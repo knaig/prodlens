@@ -17,10 +17,12 @@
 // (default 2.0). Scene length = narration audio length + holdAfter.
 import { execFile } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { ensureTtsCacheDir, ttsCacheDir } from "../llm/tts-cache.js";
 import { createHash } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 
-const TTS_CACHE_DIR = join(process.cwd(), "data", "tts-cache");
+// Cache location is anchored to the package, not the caller's cwd - see
+// src/llm/tts-cache.ts for why that mattered.
 
 export interface CursorKeyframe {
   /** Seconds from scene start when the cursor should be at this position. */
@@ -164,7 +166,7 @@ async function synthTts(text: string, voice: string, rate: number, ttsCmd: strin
   // the clip - re-rendering a video with unchanged narration lines stops
   // burning TTS quota on the same audio every time.
   const cacheKey = createHash("sha1").update(`${backend}|${ttsCmd}|${voice}|${rate}|${text}`).digest("hex");
-  const cached = join(TTS_CACHE_DIR, cacheKey);
+  const cached = join(ttsCacheDir(), cacheKey);
   if (existsSync(cached)) {
     copyFileSync(cached, outPath);
     return outPath;
@@ -191,7 +193,7 @@ async function synthTts(text: string, voice: string, rate: number, ttsCmd: strin
     try {
       await render();
       if (existsSync(outPath)) {
-        try { mkdirSync(TTS_CACHE_DIR, { recursive: true }); copyFileSync(outPath, cached); } catch { /* cache best-effort */ }
+        try { if (ensureTtsCacheDir()) copyFileSync(outPath, cached); } catch { /* cache best-effort */ }
         return outPath;
       }
     } catch (err) {

@@ -6,19 +6,19 @@
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { ensureTtsCacheDir, ttsCacheDir } from "../llm/tts-cache.js";
 import { synthNarration } from "../execution/explain.js";
 import type { VoiceSpec } from "./types.js";
 
 const GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview";
 
-const CACHE_DIR = join(process.cwd(), "data", "tts-cache");
 
 export async function synthCast(text: string, voice: VoiceSpec | undefined, outPath: string): Promise<string> {
   const name = voice?.name ?? "Kore";
   // Content-hash cache: identical (text, voice, style) reuses the clip -
   // iterative renders stop burning TTS quota on unchanged lines.
   const key = createHash("sha1").update(`${name}|${voice?.style ?? ""}|${text}`).digest("hex");
-  const cached = join(CACHE_DIR, `${key}.wav`);
+  const cached = join(ttsCacheDir(), `${key}.wav`);
   if (existsSync(cached)) {
     copyFileSync(cached, outPath);
     return outPath;
@@ -26,8 +26,7 @@ export async function synthCast(text: string, voice: VoiceSpec | undefined, outP
   if (voice?.style && process.env.GEMINI_API_KEY) {
     try {
       await synthGeminiStyled(`Speak in this style - ${voice.style}: ${text}`, name, outPath);
-      mkdirSync(CACHE_DIR, { recursive: true });
-      copyFileSync(outPath, cached);
+      if (ensureTtsCacheDir()) copyFileSync(outPath, cached);
       try {
         const { recordCost } = await import("../usage/ledger.js");
         recordCost("tts", `tts:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 7)}`, 1, { note: `styled ${name}` });
@@ -38,7 +37,7 @@ export async function synthCast(text: string, voice: VoiceSpec | undefined, outP
     }
   }
   const res = await synthNarration(text, name, 180, "", outPath);
-  try { mkdirSync(CACHE_DIR, { recursive: true }); copyFileSync(outPath, cached); } catch { /* cache best-effort */ }
+  try { if (ensureTtsCacheDir()) copyFileSync(outPath, cached); } catch { /* cache best-effort */ }
   return res;
 }
 

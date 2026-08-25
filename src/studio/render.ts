@@ -293,6 +293,15 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
 
   if (!parts.length) throw new Error(`nothing rendered - ${skipped.length} scene(s) skipped: ${skipped.map((s) => s.reason).join("; ")}`);
 
+  // A renderer that returned a path but wrote no file used to surface far away
+  // as an ENOENT inside the concat, with the real reason sitting unread in
+  // `skipped`. Check here, where both are in hand.
+  const missing = parts.filter((p) => !existsSync(p));
+  if (missing.length) {
+    const why = skipped.length ? ` Skipped: ${skipped.map((s) => `${s.sceneId}: ${s.reason}`).join("; ")}` : "";
+    throw new Error(`renderer reported success but produced no file: ${missing.join(", ")}.${why}`);
+  }
+
   // ---- concat ----
   if (parts.length === 1) {
     await copyFile(parts[0], inputs.outMp4);

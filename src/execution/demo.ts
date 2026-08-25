@@ -220,6 +220,11 @@ function screenPoint(x: number, y: number): { x: number; y: number } {
  *  click - so the recording shows a human pointer, not a jump + instant hit.
  *  In OS-cursor mode this drives the REAL cursor via cliclick at translated
  *  screen coordinates. */
+/** Last viewport position the pointer was driven to. Playwright's mouse keeps
+ *  its own position across navigation, but the overlay is redrawn, so we need
+ *  this to re-sync the two after a goto (see resyncCursor). */
+let lastMouse: { x: number; y: number } | null = null;
+
 async function humanClick(page: Page, x: number, y: number): Promise<void> {
   if (osCursorMode) {
     const s = viewportToScreen(osCursorMode.geom, x, y);
@@ -227,11 +232,31 @@ async function humanClick(page: Page, x: number, y: number): Promise<void> {
     return;
   }
   await page.mouse.move(x, y, { steps: 24 });
+  lastMouse = { x, y };
   await page.waitForTimeout(140);
   await page.mouse.down();
   await page.waitForTimeout(80);
   await page.mouse.up();
   await page.waitForTimeout(120);
+}
+
+/** After a navigation the overlay is a fresh element that has seen no mouse
+ *  events. Nudge the real pointer so it emits one, which re-draws the cursor
+ *  where it actually is instead of leaving it parked at its restored guess -
+ *  and gives navigate-only scenes a pointer that is somewhere sensible. */
+async function resyncCursor(page: Page): Promise<void> {
+  if (osCursorMode) return; // the real OS cursor never needs re-syncing
+  const target =
+    lastMouse ??
+    (await page
+      .evaluate(() => ({ x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2) }))
+      .catch(() => null));
+  if (!target) return;
+  // A one-pixel round trip is enough to emit mousemove without disturbing
+  // hover state in a way the viewer would notice.
+  await page.mouse.move(target.x + 1, target.y + 1).catch(() => null);
+  await page.mouse.move(target.x, target.y).catch(() => null);
+  lastMouse = target;
 }
 
 /** Center of a visible locator, or null if not found/visible. */
@@ -650,6 +675,10 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
         // ceiling below. settleMs/opts.settleMs is now that ceiling, not a
         // fixed wait every screen pays regardless of how fast it rendered.
         await page.waitForLoadState("networkidle", { timeout: step.settleMs ?? opts.settleMs ?? 3000 }).catch(() => null);
+        // Any navigation - goto, a click that routed, a redirect - rebuilds the
+        // overlay. Re-sync once the screen has settled so the pointer is drawn
+        // where it actually is before this step's narration plays.
+        await resyncCursor(page);
         const screenReadySec = (Date.now() - t0) / 1000;
 
         let narrate = step.narrate;
@@ -1182,6 +1211,7 @@ async function runStep(page: Page, baseUrl: string, step: DemoStep): Promise<voi
   if (step.goto) {
     const target = step.goto.split("?")[0].split("#")[0];
     await page.goto(`${baseUrl}${target}`, { waitUntil: "domcontentloaded", timeout: 20000 });
+    await resyncCursor(page);
     return;
   }
   if (step.fill) {
