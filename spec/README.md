@@ -145,7 +145,41 @@ diff -r <ux-flow-tester>/spec <prodlens>/spec
 If the repositories are ever merged or one is retired, delete this section
 rather than leaving it describing a split that no longer exists.
 
-## 7. Change process
+## 7. Verifying a change before it costs anything
+
+Rendering is the expensive step: a narrated scene costs minutes of wall time,
+real TTS spend, and - for browser scenes - a live recording that runs at 1x.
+So **no change to the render path is verified by rendering a video.** Climb the
+ladder instead, cheapest rung first, and stop at the first one that fails.
+
+| # | rung | command | cost | what it proves |
+| --- | --- | --- | --- | --- |
+| 0 | types + tests | `npx tsc --noEmit && npm test` | seconds | nothing is structurally broken |
+| 1 | spec agreement | `npm run spec:check` | instant | the spec and the code still describe each other |
+| 2 | preflight | `npm run render:check` | seconds, offline | environment, inputs, projection, narration state, and an estimate of length/time/spend |
+| 3 | still | `npm run diagram:still` | ~2s, no TTS | the layout - clipping, overlap, truncation, orphan nodes |
+| 4 | smoke | `npm run diagram:smoke` | ~2s | motion and audio wiring, over a 3-second frame slice |
+| 5 | full render | `npm run diagram:render` | minutes + spend | the deliverable |
+
+Rungs 2-4 exist because the failures they catch are the ones that used to be
+found only after paying for a full render: a stale narration manifest, a
+respec that projects to orphan nodes, a renderer that reports success and
+writes nothing.
+
+**Every improvement to the render path carries this checklist:**
+
+1. State what should visibly change, and on which rung it would show up.
+2. Run rung 0 and 1 - they gate everything else.
+3. Run `render:check`; it must reach `READY to render`. Read the warnings:
+   a stale manifest means the next render pays for TTS.
+4. For anything visual, look at the still (rung 3) before rendering. A layout
+   regression is obvious in a PNG and expensive in a video.
+5. For anything about timing, audio, or animation, run the smoke slice (rung 4).
+6. Only then render, and only once.
+7. Record what changed in `traceability.md` - the status row, or §6 if it
+   closes a divergence.
+
+## 8. Change process
 
 1. Edit the file that owns the requirement (see §1).
 2. Update its row in `traceability.md`.

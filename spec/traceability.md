@@ -175,7 +175,7 @@ Defined in v2 §7.
 | P2 | verification pipeline (QA surface) | partial | stages `scan/discover/prioritize/run/report/visual/respec` wired with SSE; run-history diff view missing (QA8) |
 | P3 | respec + vision | implemented | Vision and Respec tabs |
 | P4 | demo studio (PM surface) | partial | script/compile/narration/spec/render/registry wired; bug-reel generator missing (QA6) |
-| P5 | diagram engine | partial | `src/studio/diagram.ts` ships animated SVG scenes; the v3 renderer set is separate (§5) |
+| P5 | diagram engine | partial | v3 (elkjs + Remotion) is now the studio's diagram backend on real respec data (D-DIAGV3-1). Structural and sequence renderers ship; deployment, activity, and state-machine remain fixture-only (§5) |
 | P6 | call scenes | implemented | scene contract, adapter bridge, reference adapter, and VoicEra's voice adapter; transcript + protocol-frame capture land as scene artifacts. Translation captions still belong to G6 |
 | P7 | onboarding + sharing | partial | `src/studio/preflight.ts` exists; `--host` + token LAN sharing not built |
 
@@ -207,7 +207,7 @@ divergence is listed here.
 | D-DEMOSPEC-1 | v2 §4.1 shows `"product"` and `micAudio` in the DemoSpec sketch | `DemoSpec2.projectId`, `Scene2.micWav` in `src/studio/types.ts` | prose sketch is stale; [schemas §5.2](schemas.md) is normative | spec prose wrong |
 | D-FRAMES-1 | v2 §4.6/§13.7 say frames are data in `frames/*.json` | `FRAMES` is a constant in `src/studio/types.ts`; no `frames/` directory exists | spec ahead of code (externalization not done) |
 | D-RERENDER-1 | per-scene re-render of only changed scenes (PM4) | choreography and `specHash` exist; selective re-render does not | spec ahead of code |
-| D-DIAGV3-1 | v3 renderers are the diagram backend | `diagrams/` workspace is standalone | spec ahead of code |
+| D-DIAGV3-1 | *(closed 2026-08-25)* the v3 renderers ARE the studio's diagram backend | `src/studio/diagram-v3.ts` bridges studio to the elkjs/Remotion workspace; `render.ts` routes diagram scenes there and falls back to the legacy renderer only when `diagrams/` is absent, saying so in the log | resolved |
 | D-PRICING-1 | two pricing models coexist | v2 §12.3 per-artifact quotas vs §13.10 credits; `src/web/pricing.ts` implements the tier table | §13.10 supersedes (README §2.2); §12.3 is annotated |
 | D-HOSTED-1 | hosted control plane: orgs, seats, Clerk auth, Razorpay billing, Blob artifacts | none present - the `clerk-*` strings in `src/discovery/auth.ts` are strategies for logging into *target apps*, unrelated to prodlens's own auth | not-started, matching v2 §12.4 |
 | D-RUNNER-1 | runner protocol v1 (claim / log / complete) | `src/runner/agent.ts` implements the runner side; the control-plane endpoints it calls are not built here | partial |
@@ -242,7 +242,6 @@ requirement or the code and updating its row.
 | --- | --- | --- |
 | `PM2`, `G6` | caption translation and the localization gate | narration variants exist (`schemas.md` §5.1); needs the gate UI |
 | `G8`, `PM4` | per-scene comments and selective re-render | choreography determinism is in place; needs `specHash` per scene |
-| `P5` | v3 renderers as the studio diagram backend | `D-DIAGV3-1` |
 | `QA6`, `P4` | bug reel generated from confirmed issues | `QA4` first — it needs confirmed verdicts |
 | `FR-GEPA-4` | labeled training set and scoring harness | the last open item from Technical-Spec §13 |
 | `G3`, `G5`, `G7` | gate UIs: surface review, act-grouped storyboard, per-scene resource checklist | web app work, independent of each other |
@@ -276,6 +275,9 @@ Modules carrying a spec anchor in their header comment. This is the
 | `src/llm/tts-cache.test.ts` | v2 §4.4 |
 | `src/execution/os-cursor.ts` | v2 §4 (PM1) |
 | `src/execution/os-cursor.test.ts` | v2 §4 (PM1) |
+| `src/studio/diagram-v3.ts` | v2 §5.4 (D-DIAGV3-1) |
+| `src/studio/diagram-v3.test.ts` | v2 §5.4 |
+| `scripts/render-check.mjs` | v2 §5.4, §12.2 |
 | `src/graph/analysis.ts` | `FR-VE-4`, `FR-GE-3` |
 | `src/graph/graph-store.ts` | `FR-GE-1`, `FR-GE-2`, `FR-GE-3` |
 | `src/graph/route-match.ts` | `FR-GE-2` |

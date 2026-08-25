@@ -9,6 +9,7 @@ import { renderProductDemo, type DemoScreenplay, type DemoScript, type DemoStep 
 import { probeDuration } from "../execution/explain.js";
 import type { Respec } from "../respec/respec.js";
 import { renderDiagramScene, renderSequenceScene } from "./diagram.js";
+import { ensureNarration, prepareV3Data, renderSequenceV3, v3Available } from "./diagram-v3.js";
 import { listAdapters, loadExternalAdapter } from "../adapters/engine.js";
 import "../adapters/session-dom-adapter.js"; // registers the reference session adapter at import time
 import type { ProdlensAdapter } from "../adapters/types.js";
@@ -24,6 +25,9 @@ export interface RenderInputs {
   dataDir: string;
   /** Skip TTS - silent draft for the render-review gate. */
   draft?: boolean;
+  /** Force the legacy in-page SVG diagram renderer instead of v3. Escape
+   *  hatch for comparing the two; v3 is the default wherever it can run. */
+  diagramRenderer?: "v3" | "legacy";
   onProgress?: (line: string) => void;
 }
 
@@ -173,6 +177,34 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
     if (seg.kind === "diagram") {
       const scene = seg.scene;
       const tier = scene.tier ?? "summary";
+      // v3 (elkjs + Remotion) is the diagram renderer when the workspace is
+      // installed: elk sizes boxes from measured text, so it does not clip or
+      // truncate the way the legacy in-page SVG renderer does. The legacy path
+      // stays as the fallback so a checkout without diagrams/ still renders
+      // (spec §5.4, D-DIAGV3-1).
+      const v3 = inputs.diagramRenderer === "legacy" ? { ok: false, reason: "forced legacy" } : v3Available();
+      if (v3.ok) {
+        log(`[studio] segment ${si}: diagram v3 (${tier}${scene.scenario ? `, scenario "${scene.scenario}"` : ""})`);
+        try {
+          const prep = await prepareV3Data(inputs.respec!, scene.scenario);
+          log(`[studio]   projected respec: ${prep.nodes} nodes, ${prep.edges} edges, ${prep.events} flow events`);
+          if (!inputs.draft) {
+            const n = await ensureNarration();
+            log(`[studio]   narration: ${n.ran ? "synthesized" : "reused"} ${n.clips} clip(s), ${n.totalSec.toFixed(1)}s`);
+          }
+          const res = await renderSequenceV3({ sceneId: scene.id, outMp4: join(staging, `seg-${si}.mp4`) });
+          choreographies.push(res.choreography);
+          parts.push(res.mp4);
+          continue;
+        } catch (e) {
+          // Falling through to legacy beats losing the scene, but say so - a
+          // silent downgrade is how the good renderer went unused for months.
+          log(`[studio]   v3 failed, falling back to the legacy renderer: ${e instanceof Error ? e.message : e}`);
+        }
+      } else if (inputs.diagramRenderer !== "legacy") {
+        log(`[studio] segment ${si}: diagram v3 unavailable (${v3.reason}) - using the legacy renderer`);
+      }
+
       log(`[studio] segment ${si}: diagram (${tier}${scene.mode === "cast" ? ", cast" : ""})`);
       try {
         const res = await renderDiagramScene({

@@ -33,3 +33,5 @@ tmp/
 diagrams/.tts-cache/
 diagrams/out/
 diagrams/public/narration/
+# Respec projections - regenerate with src/export/prepare.ts
+diagrams/public/data/
