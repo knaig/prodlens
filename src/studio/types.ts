@@ -1,3 +1,4 @@
+// Spec: v2 §4, §2.4, §4.6 (schemas.md §5) - see spec/traceability.md
 // Demo studio data model (spec v2 §4): script -> scenes -> choreography, with
 // narration, audiences, and story frames as first-class artifacts.
 
@@ -52,14 +53,22 @@ export interface Scene2 {
   scenario?: string;
   /** "cast" = humanized components, each speaking in its own voice. */
   mode?: "narrator" | "cast";
-  // call fields
-  agentPath?: string;
-  startClick?: string;
-  endClick?: string;
-  micWav?: string[];
-  turnGapMs?: number;
+  // session / call fields (spec §4.3): transport-agnostic. The scene says WHAT
+  // conversation happens, never how it is carried - no protocol, WS URL, or
+  // audio format here. `sessionKind` names an op the product's adapter
+  // declares; the adapter owns starting, driving, and ending the session.
+  sessionKind?: string;
+  turns?: SessionTurn[];
   // artifact fields
   artifactRel?: string;
+}
+
+/** One turn of a scripted session. `bargeIn` truncates the prior speaker
+ *  mid-word - a genuine interruption, not a scripted pause (spec §4.3). */
+export interface SessionTurn {
+  speaker: string;
+  text?: string;
+  bargeIn?: boolean;
 }
 
 export interface DemoSpec2 {
@@ -72,6 +81,12 @@ export interface DemoSpec2 {
   language?: string;
   voice?: VoiceSpec;
   viewport?: { width: number; height: number };
+  /** Pin which adapter runs this spec's sessions; omitted, the first adapter
+   *  declaring the scene's sessionKind wins (spec §4.3). */
+  adapter?: string;
+  /** Adapter-specific configuration (selectors, endpoints, credentials refs).
+   *  Core never reads inside it - it is passed through to the adapter. */
+  manifest?: Record<string, unknown>;
   scenes: Scene2[];
 }
 

@@ -1,3 +1,4 @@
+// Spec: NFR-8, v2 §2.2 QA8 - see spec/traceability.md
 // Versioned run outputs: every command invocation that produces artifacts
 // lands under data/projects/<app>/runs/v0.<n>/<type>/<file>, so re-running a
 // command never overwrites a previous run's output. The version increments per

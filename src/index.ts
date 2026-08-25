@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Spec: NFR-3, v2 §2.2 QA9 - see spec/traceability.md
 import { Command } from "commander";
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

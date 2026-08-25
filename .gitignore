@@ -12,7 +12,24 @@ data/projects/*/captures/storage-state/
 data/projects/*/demos/*/storage-state/
 data/projects/*/storage-state/
 data/projects/*/auth/
+# Any cached Playwright session, wherever a run put it - these are live login
+# cookies, not artifacts. The per-project rules above predate the data/<run>/
+# layout and no longer cover every location.
+**/storage-state/
+# Per-project credentials for the target app (spec v2 §7 P1: gitignored, never
+# echoed into HTML). These hold a real email/password for someone's account.
+data/projects/*/secrets.json
+secrets.json
 .env
 .env.local
 *.log
 .DS_Store
+
+# Scratch output from local runs - screenshots, HTTP dumps, cached sessions.
+tmp/
+
+# Generated diagram media: TTS clip cache, pregenerated narration, and rendered
+# stills/videos. All reproducible from diagrams/src + the respec.
+diagrams/.tts-cache/
+diagrams/out/
+diagrams/public/narration/

@@ -1,3 +1,4 @@
+// Spec: v2 §12.2 - see spec/traceability.md
 // Cost ledger (SaaS metering): the lazy-dist pattern ported to prodlens.
 // Flat per-unit cost ESTIMATES (labeled as estimates - precise enough for cap
 // enforcement, not a billing-grade token meter), idempotent recordCost via

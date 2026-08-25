@@ -1,3 +1,4 @@
+// Spec: FR-VE-3 - see spec/traceability.md
 // Video capture for UX flows. Three deliverable shapes, one module:
 //
 // 1. capturePathToVideo - replays one PrioritizedPath in a real browser with

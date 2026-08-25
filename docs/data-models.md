@@ -1,7 +1,12 @@
 # Data models
 
-Core types live in `src/types.ts`. Two deliberate extensions to the spec are
-noted inline there (`source: "both"` and the GraphVersion wrapper).
+> **Orientation only.** The normative definitions are
+> [spec/schemas.md](../spec/schemas.md) - it covers these core types plus the
+> studio, respec, adapter, metering, and artifact-registry contracts, and
+> documents every deliberate deviation from the v1 spec sketch. This page is a
+> short tour of the types you meet first; if the two disagree, `spec/` wins.
+
+Core types live in `src/types.ts`.
 
 ## Graph
 
@@ -65,14 +70,12 @@ The versioned wrapper every downstream stage operates on. `report` diffs an
 intended vs actual version.
 
 ```ts
-interface GraphVersion {
+interface GraphVersion extends Graph {
   id: string;
-  type: "intended" | "actual";
+  type: "intended" | "actual" | "merged";
   createdAt: string;
   parentVersionId?: string;
-  entryPoints: string[];
-  nodes: Record<string, Node>;
-  edges: Edge[];
+  metadata?: Record<string, any>;
 }
 ```
 
@@ -128,11 +131,12 @@ for manual triage).
 
 ```ts
 interface TraceFeedback {
-  module: string;
-  score: number;          // 0..1
+  runId: string;
+  module: "recovery" | "synthesis" | "prioritization" | "diagnosis";
+  score: number;          // scalar, for ranking
   feedback: string;
   traceSummary: string;
-  examples?: { type?: string; detail?: string }[];
+  examples?: any[];
 }
 
 interface GepaGuidance {

@@ -1,8 +1,28 @@
 # Prodlens v2 Spec: Self-Serve Frontend, HITL Pipeline, Demo + QA + Architecture Engines
 
-Status: draft for review - 2026-08-21 (rev 2: personas/use cases, QA engagement, reverse-spec, architecture walkthroughs)
-Owner: Karthik
-Companion docs: `spec/Prodlens-Product-Spec.md`, `spec/Prodlens-Technical-Spec.md`, `docs/adapters.md`
+**Status:** Operative - **Spec revision:** 4 - **Last updated:** 2026-08-25
+**Owner:** Karthik
+**Spec root:** [README.md](README.md) - **Baselines:** [Prodlens-Product-Spec.md](Prodlens-Product-Spec.md), [Prodlens-Technical-Spec.md](Prodlens-Technical-Spec.md) - **Types:** [schemas.md](schemas.md) - **Status of every requirement:** [traceability.md](traceability.md) - **Adapters:** `docs/adapters.md`
+
+> **This is the operative spec.** It wins over the v1 Product and Technical
+> specs wherever they overlap; the exact supersession list is
+> [README §2.2](README.md#22-what-v2-supersedes-explicitly).
+>
+> Type contracts in this document are prose sketches for readability.
+> [schemas.md](schemas.md) is normative for every type.
+>
+> Not everything here is built. Each use case, gate, and phase carries an
+> implementation status in [traceability.md](traceability.md), and every known
+> spec-ahead-of-code divergence is named in its §6. Spec ahead of code is
+> legal; silence about it is not.
+
+**Revision history**
+| rev | date | change |
+| --- | --- | --- |
+| 1 | 2026-08-21 | initial: self-serve frontend, HITL pipeline, demo/QA/architecture engines |
+| 2 | 2026-08-21 | personas and use cases, QA engagement, reverse-spec, architecture walkthroughs |
+| 3 | 2026-08-25 | §4.3 rewritten transport-agnostic; spec set given a root index, normative schemas, and a trace matrix; §12.3 marked superseded by §13.10 |
+| 4 | 2026-08-25 | §4.3 session contract implemented end to end (bridge, reference adapter, VoicEra adapter); Video 2 no longer requires the live voice backends |
 
 ## 1. Problem
 
@@ -188,6 +208,8 @@ synchronized tracks, all in seconds from scene start:
 }
 ```
 
+Normative definition: `SceneChoreography` in [schemas §5.4](schemas.md).
+
 Properties that make it first-class rather than an internal detail:
 
 - **Inspectable + editable**: the render-review gate renders the timeline as
@@ -214,14 +236,19 @@ Section 9 and use cases PM1-PM7 without per-video engine code.
 
 ```jsonc
 {
+  "version": 2,
   "title": "...",
-  "product": "voicera",             // project registry key
+  "projectId": "voicera",           // project registry key
   "baseUrl": "http://localhost:3200",
+  "audience": "prospect",           // AudiencePersona.id (§2.4)
+  "frame": "before-after",          // StoryFrame.id (§4.6)
   "language": "en",
   "voice": { "backend": "gemini", "name": "Kore", "style": "Indian English accent" },
-  "scenes": [ /* Scene[] */ ]
+  "scenes": [ /* Scene2[] */ ]
 }
 ```
+
+Normative definition: `DemoSpec2` in [schemas §5.2](schemas.md).
 
 Scene types (discriminated union on `type`):
 
@@ -229,7 +256,7 @@ Scene types (discriminated union on `type`):
 | --- | --- | --- |
 | `screen` | click-through UI scene (today's demo step) | `click/goto/fill/scroll/settleMs/narrate` |
 | `login` | credentials typed on camera | `maskPassword: true`, uses project auth config |
-| `call` | live in-browser voice conversation | `agentId`, `micAudio: [wav...]`, `language`, `maxTurns`, `captureRecording`, `captureTranscript` |
+| `call` | live interactive session (e.g. a voice conversation) | `sessionKind`, `turns: [{speaker, text?, bargeIn?}]` - transport-agnostic, executed by the project's adapter (§4.3) |
 | `artifact` | show a produced artifact | `kind: transcript\|audio\|json\|log\|screenshot`, `source: <scene-id>.<artifact>`, `overlay: translation` |
 | `diagram` | narrated architecture/flow walkthrough | `tier: summary\|tutorial`, `scenario?`, `focus?` - full contract in Section 5 |
 | `card` | title/value-prop burn-in | `title`, `tagline`, `narrate` |
@@ -280,20 +307,38 @@ replay next time.
 
 ### 4.3 The `call` scene contract
 
-- Drives whatever live-interaction surface the product's ADAPTER exposes via
-  the `browser.start_call` primitive - the engine knows only the primitive.
-  (Reference product: voicera's `test-browser-dialog.tsx`, WS to its voice
-  server. A different product's adapter might open a chat widget, a WebRTC
-  room, or a terminal session under the same contract.)
-- Mic input: Playwright `--use-fake-device-for-media-stream
+> **Status: implemented.** `Scene2` carries only `sessionKind` + `turns`, and
+> `src/studio/render.ts` delegates execution to the adapter that declares the
+> op. Two adapters implement one: the DOM-chat reference
+> (`src/adapters/session-dom-adapter.ts`) and VoicEra's
+> (`voicera_mono_repository/prodlens/adapter.mjs`), which scripts the
+> WebSocket its browser test dialog speaks. Both are covered by tests that need
+> no product backend running.
+
+- Transport-agnostic at the Scene2/compiler level: a call/session scene
+  carries only `sessionKind` (free text, e.g. "voice-call") and a `turns`
+  script (`{speaker, text?, bargeIn?}[]`) - never a specific protocol, WS URL,
+  or audio format. Concrete execution is ALWAYS delegated to the project's
+  resolved ProdlensAdapter (`src/adapters/types.ts`, registry in
+  `src/adapters/engine.ts`'s `registerAdapter`/`selectAdapters`) via
+  `adapter.execute({op: <adapter-defined>, args: {turns, ...}}, ctx)` - core
+  (`render.ts`/`demo.ts`) never hardcodes a product's transport.
+  (Reference adapter: voicera's, driving `test-browser-dialog.tsx`'s WS
+  contract via a WS-mock + TTS'd audio + fakeMicWav. A video-calling
+  product's adapter would satisfy the same sessionKind/turns contract via
+  WebRTC/video-frame mocking instead; a chat product's via DOM manipulation -
+  same scene contract, different adapter internals.)
+- Mic input (voice adapters): Playwright `--use-fake-device-for-media-stream
   --use-file-for-fake-audio-capture=<wav>`; multi-turn via queued WAVs.
-- recordVideo is silent; call audio enters the final mix from the product's
-  own call recording (fetched via adapter post-scene), fallback: fed WAVs +
-  TTS'd agent lines aligned to the screenplay.
+- Barge-in: a `turns[].bargeIn` entry truncates the prior speaker's audio
+  mid-word (voice adapters reuse demo.ts's `speakCutAtSec`) - a genuine
+  interruption, not a scripted pause.
+- recordVideo is silent; call audio enters the final mix from the adapter's
+  own captured/synthesized turn audio, aligned to the screenplay.
 - Scene outputs into the artifact store: `recording.wav`, `transcript.json`,
   `translation.json` - addressable by later `artifact` scenes.
-- Voice backend down -> scene skipped with a screenplay note (blocked-resource
-  policy), never a crashed render.
+- Adapter/voice backend down -> scene skipped with a screenplay note
+  (blocked-resource policy), never a crashed render.
 
 ### 4.4 Narration layer (the voice is the product)
 
@@ -402,8 +447,12 @@ diagrams. `design-decision` in particular consumes human annotations from
 the respec gate ("we chose Mongo over Postgres because...") - the one story
 source code alone cannot provide.
 
-Mechanically: a frame is data (`frames/*.json`: act list, per-act guidance
-prompt, allowed scene types, default audience). The script-to-demo compiler
+Mechanically: a frame is data - act list, per-act guidance prompt, allowed
+scene types, default audience (`StoryFrame`, [schemas §5.5](schemas.md)).
+Reference frames ship as the `FRAMES` constant in `src/studio/types.ts`;
+externalizing them to per-project `frames/*.json` so a project can add its own
+is specified but not yet built (traceability `D-FRAMES-1`). The
+script-to-demo compiler
 (4.2) tags each extracted beat with an act; drafted-from-scratch scripts are
 generated act-by-act. The scene-plan gate shows act headers in the
 storyboard; an act with no scenes is surfaced as a story hole ("your
@@ -560,7 +609,7 @@ diffable, re-runnable.
 | 1 | Vision | `vision.md` - goals, personas, key features, do-show/don't-show | write or edit LLM seed; approve | PM |
 | 2 | Reverse-spec | `respec/spec.md` + drift report | correct inferences, annotate, approve | Engineer |
 | 3 | Surface | `surface.json` summary (screens, components, docs found) | correct/annotate, exclude noise | QA |
-| 4 | Journeys | `paths.json` | approve/reject/edit goals (existing `review.ts`, web-ified) | QA |
+| 4 | Journeys | `paths.json` | approve/reject/edit goals (existing `src/prioritization/review.ts`, web-ified) | QA |
 | 5 | Scene plan | `demo-spec.json` storyboard incl. diagram scenes + scenarios | reorder, rewrite narration, set voice/tier, approve | PM |
 | 6 | Localization | screenplay translations | edit translated captions | PM |
 | 7 | Resources | needs checklist (creds, WAVs, numbers, keys) | supply values; blocked scenes surfaced up front | all |
@@ -647,11 +696,17 @@ knowledge base, numbers, history/analytics -> `card` outro. Indian-English
 narration.
 
 **Video 2 - Marathi/Bhili live call (PM5).** `card` intro -> `screen` (agent
-config with Bhili/Marathi STT-TTS) -> `call` scene: prerecorded Marathi/Bhili
-caller WAVs through the in-browser test call, agent responding live (pipecat +
-`bhili_stt.py` / AI4Bharat-Bhashini) -> `artifact` scenes: transcript bubbles
-from History, English translation captions over the call playback. Hard
-prereq: :7860 + Bhili STT/TTS backends running.
+config with Bhili/Marathi STT-TTS) -> `call` scene: the conversation runs
+through VoicEra's real in-browser test dialog, driven by its adapter -> 
+`artifact` scenes: transcript bubbles from History, English translation
+captions over the call playback.
+
+The agent side is scripted through the dialog's own WebSocket contract rather
+than answered by a live model, so the render is deterministic and the `:7860` +
+Bhili STT/TTS stack is NOT a prerequisite - which is the difference between a
+demo that reproduces and one that depends on a model's mood. Per-turn agent
+audio is supplied as WAVs via the adapter's `turnAudio` manifest field.
+Remaining for this video: the translation captions, which are gate G6.
 
 **Video 3 - VoicEra architecture summary (PM6).** Single `diagram` scene,
 `tier: summary`, scenario "life of an inbound call" traced once, 60-90s -
@@ -712,7 +767,8 @@ commodity layer.
 - No Indian voice in built-in TTS backends; Gemini voice + accent style-prompt
   via `--tts-cmd` hook is current best. Promote into a first-class
   `voice.style` field (PM2).
-- `surface.ts` doc ingestion is paths-only; respec (Section 3) subsumes it.
+- `src/adapters/surface.ts` doc ingestion is paths-only; respec (Section 3)
+  subsumes it with SUMMARY-aware content ingestion.
 
 ## 12. SaaS productization
 
@@ -755,6 +811,12 @@ The lazy-dist ledger pattern, ported (`src/usage/ledger.ts`):
   pricing can never silently drift from the costs.
 
 ### 12.3 Pricing (launch)
+
+> **Superseded by §13.10.** Quotas are now measured in credits (1 credit ~
+> $0.01 COGS), not per-artifact counts, and seats are priced separately. The
+> table below is kept for its margin analysis, which still holds because both
+> models derive from the same ledger constants (§12.2). `src/web/pricing.ts`
+> implements the §13.10 model.
 
 | tier | price | quotas (mo) | margin at full use |
 | --- | --- | --- | --- |

@@ -1,3 +1,4 @@
+// Spec: FR-GE-2 - see spec/traceability.md
 // Shared segment-matching used both to resolve a static-pass target string
 // against the route inventory, and to fold a live crawl's concrete URLs
 // (real project slugs, real post ids) back onto the same route patterns so

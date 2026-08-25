@@ -1,3 +1,4 @@
+// Spec: FR-HITL-2, FR-HITL-4, v2 §6 G4 - see spec/traceability.md
 // Manual review gate (README roadmap): a state machine sitting between
 // `prioritize` and `run` - every path starts "planned"; `review` moves it to
 // "approved" or "skipped" (this codebase's PrioritizedPath.status has no

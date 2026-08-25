@@ -1,3 +1,4 @@
+// Spec: FR-IS-1 - see spec/traceability.md
 // Detects forms on the current live page. Needs a real rendered DOM
 // (input types, names, required-ness aren't reliably knowable from source
 // text alone - a controlled <input> can be typed anything) so this only runs

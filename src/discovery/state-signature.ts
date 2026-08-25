@@ -1,3 +1,4 @@
+// Spec: FR-RE-1, NFR-1 - see spec/traceability.md
 // A screen's identity for dedup during the live crawl. URL path is the
 // primary signal (this app is server-rendered, URL-driven); a light DOM hash
 // is layered on top so two different SPA states behind the same URL (e.g. a

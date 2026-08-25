@@ -1,3 +1,4 @@
+// Spec: FR-VE-4, FR-GE-3 - see spec/traceability.md
 // Turns a raw Graph into the findings the reporter renders: unreachable
 // screens, dead ends, missing return paths, broken edges, and the static
 // classifications worth a human's attention.

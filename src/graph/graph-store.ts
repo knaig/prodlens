@@ -1,3 +1,4 @@
+// Spec: FR-GE-1, FR-GE-2, FR-GE-3 - see spec/traceability.md
 import { mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Edge, Graph, GraphDiff, GraphVersion, Node } from "../types.js";

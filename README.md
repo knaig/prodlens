@@ -12,6 +12,12 @@ exist, screens nobody actually wired into the app's navigation. Normal
 dev/test loops check "does this one flow work" - nothing checks "is every
 node reachable and every edge functional across the whole graph." This does.
 
+**Specification:** [`spec/README.md`](spec/README.md) is the root of the
+Prodlens spec - document map, precedence rules, normative
+[schemas](spec/schemas.md), and a [trace matrix](spec/traceability.md) giving
+every requirement's implementation status. **Docs:** [`docs/`](docs/README.md)
+describes how the system works today. This README is the operator guide.
+
 ## How it works
 
 Two complementary discovery passes feed one graph:
@@ -292,6 +298,9 @@ screens as journeys, one generic persona).
   real app (VoiceEra), the cursor pointing at each service as the stack is narrated
 
 ## Roadmap
+
+Engineering-level next steps. Requirement-level status for the whole product
+lives in [spec/traceability.md](spec/traceability.md).
 
 - React Router / other framework adapters for the static pass (currently Next.js App Router only)
 - Real import-graph tracing to replace the `from: "*"` shared-component heuristic

@@ -1,3 +1,4 @@
+// Spec: v2 §1.1, §4.3 - see spec/traceability.md
 // Prodlens Adapter SDK - the one abstraction that keeps prodlens product-
 // agnostic. A product's "what it actually does" is expressed through an
 // adapter (coded plugin) that declares the interaction surfaces, scene types,

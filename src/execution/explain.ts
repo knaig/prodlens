@@ -17,7 +17,10 @@
 // (default 2.0). Scene length = narration audio length + holdAfter.
 import { execFile } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { basename, dirname, join } from "node:path";
+
+const TTS_CACHE_DIR = join(process.cwd(), "data", "tts-cache");
 
 export interface CursorKeyframe {
   /** Seconds from scene start when the cursor should be at this position. */
@@ -156,12 +159,22 @@ export async function renderNarratedVideo(scenes: ExplainScene[], outPath: strin
  *  TTS_BACKEND=gemini|kokoro|say pins a backend (auto = all in order).
  *  Writes .wav (Gemini/Kokoro) or .aiff (say). */
 async function synthTts(text: string, voice: string, rate: number, ttsCmd: string, outPath: string): Promise<string> {
-  // Metering: one tts cost event per synthesized clip (estimate ledger).
+  const backend = (process.env.TTS_BACKEND || "auto").toLowerCase();
+  // Content-hash cache: identical (backend, ttsCmd, voice, rate, text) reuses
+  // the clip - re-rendering a video with unchanged narration lines stops
+  // burning TTS quota on the same audio every time.
+  const cacheKey = createHash("sha1").update(`${backend}|${ttsCmd}|${voice}|${rate}|${text}`).digest("hex");
+  const cached = join(TTS_CACHE_DIR, cacheKey);
+  if (existsSync(cached)) {
+    copyFileSync(cached, outPath);
+    return outPath;
+  }
+  // Metering: one tts cost event per synthesized clip (estimate ledger) - only
+  // on a cache miss, since a cache hit costs nothing.
   try {
     const { recordCost } = await import("../usage/ledger.js");
     recordCost("tts", `tts:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 7)}`, 1, { note: `${voice} ${text.length} chars` });
   } catch { /* never block synthesis */ }
-  const backend = (process.env.TTS_BACKEND || "auto").toLowerCase();
   const candidates: Array<() => Promise<void>> = [];
   if (ttsCmd) candidates.push(() => runCmd("sh", ["-c", ttsCmd], { TTS_TEXT: text, TTS_OUT: outPath, TTS_VOICE: voice }));
   if (backend === "gemini") candidates.push(() => synthGeminiTts(text, voice, outPath));
@@ -177,7 +190,10 @@ async function synthTts(text: string, voice: string, rate: number, ttsCmd: strin
     rmSync(outPath, { force: true });
     try {
       await render();
-      if (existsSync(outPath)) return outPath;
+      if (existsSync(outPath)) {
+        try { mkdirSync(TTS_CACHE_DIR, { recursive: true }); copyFileSync(outPath, cached); } catch { /* cache best-effort */ }
+        return outPath;
+      }
     } catch (err) {
       lastErr = err;
     }

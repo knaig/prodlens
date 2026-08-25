@@ -1,3 +1,4 @@
+// Spec: v2 §6 G3, §11 - see spec/traceability.md
 // Build a ProductSurface from on-disk discovery artifacts + docs + source,
 // so the LLM manifest drafter + adapters have something concrete to work from.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";

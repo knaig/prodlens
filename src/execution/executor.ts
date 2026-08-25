@@ -1,3 +1,4 @@
+// Spec: FR-VE-1, FR-VE-3, NFR-4 - see spec/traceability.md
 // Execution Engine (spec sections 3/5.7, tech spec Stage 5): runs
 // PrioritizedPath[] against the live app with bounded-concurrency workers
 // (default 4, --concurrency), each with its own browser context/page so

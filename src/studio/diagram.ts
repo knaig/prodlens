@@ -1,3 +1,4 @@
+// Spec: v2 §5 (PM6, ENG1, ENG2) - see spec/traceability.md
 // Animated architecture diagram scenes (spec v2 §5): the "professor". The
 // diagram is a live SVG page recorded with Playwright + the DOM cursor overlay;
 // element reveals, edge draws, and a scenario dot are keyframed on a JS
@@ -266,7 +267,9 @@ export async function renderDiagramScene(opts: {
     t += c.dur + GAP;
     return { ...c, at };
   });
-  const totalSec = t + 1.2;
+  // 2s tail: matches the browser path's own end buffer - enough for a TTS
+  // provider's trailing silence/fade to finish audibly instead of clipping.
+  const totalSec = t + 2;
 
   // 3. Layout + page.
   const { boxes, wires } = layoutTopology(comps);
@@ -276,6 +279,14 @@ export async function renderDiagramScene(opts: {
   writeFileSync(pagePath, html);
 
   // 4. Record: reveal/highlight/travel at clip starts; the cursor glides along.
+  // recordStart marks when the webm recording actually begins (context
+  // creation) - t0 (below) is captured after the page has loaded and
+  // settled, so schedule times measured from t0 land `t0 - recordStart`
+  // seconds LATER in the recorded file than their raw value suggests. Muxing
+  // narration at the raw (unshifted) timestamp plays it early relative to the
+  // visual event it describes, and trimming the output to the raw total
+  // length cuts off that same lead-in time from the end.
+  const recordStart = Date.now();
   const browser = await chromium.launch({ headless: true });
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 }, recordVideo: { dir: opts.staging, size: { width: 1440, height: 860 } } });
   await addCursorOverlay(ctx);
@@ -370,8 +381,9 @@ export async function renderDiagramScene(opts: {
   // 5. Find the recorded webm and mux narration onto it.
   const webm = readdirSync(opts.staging).filter((f) => f.endsWith(".webm")).map((f) => join(opts.staging, f)).sort()[0];
   if (!webm) throw new Error("diagram scene: no recording produced");
-  const narrated = schedule.map((s) => ({ file: s.file, atSec: s.at, durSec: s.dur }));
-  await renderVideo(webm, narrated, [], [], opts.outMp4, "1280:-2", true, false, totalSec);
+  const leadSec = Math.max(0, (t0 - recordStart) / 1000);
+  const narrated = schedule.map((s) => ({ file: s.file, atSec: s.at + leadSec, durSec: s.dur }));
+  await renderVideo(webm, narrated, [], [], opts.outMp4, "1280:-2", true, false, totalSec + leadSec);
   rmSync(webm, { force: true });
   return { mp4: opts.outMp4, durationSec: totalSec, choreography };
 }
@@ -480,12 +492,20 @@ export async function renderSequenceScene(opts: {
   const GAP = 0.4;
   let t = 0.6;
   const schedule = clips.map((c) => { const at = t; t += c.dur + GAP; return { ...c, at }; });
-  const totalSec = t + 1.0;
+  // 2s tail: matches the browser path's own end buffer - enough for a TTS
+  // provider's trailing silence/fade to finish audibly instead of clipping.
+  const totalSec = t + 2;
 
   const html = buildSequenceHtml(flow.name, participants, flow.steps);
   const pagePath = join(opts.staging, `seq-${opts.sceneId}.html`);
   writeFileSync(pagePath, html);
 
+  // recordStart marks when the webm recording actually begins (context
+  // creation) - t0 (below) is captured after the page has loaded and
+  // settled, so schedule times measured from t0 land `t0 - recordStart`
+  // seconds LATER in the recorded file than their raw value suggests. See
+  // renderDiagramScene above for the full explanation of this pattern.
+  const recordStart = Date.now();
   const browser = await chromium.launch({ headless: true });
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 }, recordVideo: { dir: opts.staging, size: { width: 1440, height: 860 } } });
   await addCursorOverlay(ctx);
@@ -534,7 +554,8 @@ export async function renderSequenceScene(opts: {
 
   const webm = readdirSync(opts.staging).filter((f) => f.endsWith(".webm")).map((f) => join(opts.staging, f)).sort()[0];
   if (!webm) throw new Error("sequence scene: no recording produced");
-  await renderVideo(webm, schedule.map((s) => ({ file: s.file, atSec: s.at, durSec: s.dur })), [], [], opts.outMp4, "1280:-2", true, false, totalSec);
+  const leadSec = Math.max(0, (t0 - recordStart) / 1000);
+  await renderVideo(webm, schedule.map((s) => ({ file: s.file, atSec: s.at + leadSec, durSec: s.dur })), [], [], opts.outMp4, "1280:-2", true, false, totalSec + leadSec);
   rmSync(webm, { force: true });
   return { mp4: opts.outMp4, durationSec: totalSec, choreography };
 }

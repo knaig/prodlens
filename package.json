@@ -21,6 +21,7 @@
     "explore": "tsx src/index.ts explore",
     "gepa": "tsx src/index.ts gepa",
     "full": "tsx src/index.ts full",
+    "spec:check": "node scripts/spec-check.mjs",
     "test": "tsx --test $(find src -name '*.test.ts')",
     "web": "tsx src/index.ts web --port 7788"
   },

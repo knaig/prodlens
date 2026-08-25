@@ -1,8 +1,9 @@
+// Spec: FR-RE-2 - see spec/traceability.md
 // Parses every source file with ts-morph looking for: navigational elements
 // (<Link>, raw <a href>, router.push/replace, redirect()) and interactive
 // elements (anything with onClick, or a native <button>) - classifying each
 // button by what its handler actually does, not just that it exists.
-import { Project, SyntaxKind, type SourceFile, type JsxAttribute } from "ts-morph";
+import { Project, SyntaxKind, Node, type SourceFile, type JsxAttribute, type JsxOpeningElement, type JsxSelfClosingElement } from "ts-morph";
 import type { StaticClassification } from "../../types.js";
 
 export interface StaticInteraction {
@@ -42,7 +43,7 @@ export function scanFile(sourceFile: SourceFile): StaticInteraction[] {
     const hrefAttr = attrs.find((a) => a.getFirstDescendantByKind(SyntaxKind.Identifier)?.getText() === "href" || a.getText().startsWith("href="));
     const onClickAttr = attrs.find((a) => a.getText().startsWith("onClick="));
     const line = el.getStartLineNumber();
-    const label = extractLabel(el.getParent());
+    const label = extractLabel(el);
 
     if (hrefAttr) {
       const target = extractAttrValueText(hrefAttr);
@@ -129,8 +130,101 @@ function extractAttrValueText(attr: JsxAttribute): string | null {
   return text.replace(/^\{|\}$/g, "").trim();
 }
 
-function extractLabel(node: import("ts-morph").Node | undefined): string {
-  if (!node) return "";
-  const text = node.getText().replace(/\s+/g, " ").trim();
-  return text.length > 60 ? text.slice(0, 57) + "..." : text;
+const MAX_LABEL_LENGTH = 60;
+/** How many levels of nested JSX children to descend into when hunting for
+ *  visible text, e.g. <Button><span><b>Save</b></span></Button>. Bounded so
+ *  we never walk into an arbitrarily deep component tree. */
+const MAX_TEXT_DEPTH = 2;
+const ACCESSIBLE_NAME_ATTRS = ["aria-label", "title", "alt"];
+
+/** Approximates the accessible name a live DOM / Playwright would compute for
+ *  a JSX element, using only the static AST - there is no live browser during
+ *  the static pass. Never falls back to raw JSX source text: that dumps the
+ *  tag name and every prop (e.g. `<Button type="button" variant="outline"...`)
+ *  which is worse than no label at all. */
+function extractLabel(el: JsxOpeningElement | JsxSelfClosingElement | undefined): string {
+  if (!el) return "";
+
+  // 1. Visible child text. Only a JsxOpeningElement has a wrapping JsxElement
+  //    with children - a JsxSelfClosingElement (<Icon />, <img />) never does.
+  const owner = Node.isJsxOpeningElement(el) ? el.getParentIfKind(SyntaxKind.JsxElement) : undefined;
+  const childText = owner ? collectVisibleText(owner, MAX_TEXT_DEPTH) : "";
+  if (childText) return finalizeLabel(childText);
+
+  // 2. Accessible-name attributes on the element itself - the same sources a
+  //    screen reader (and Playwright's getByRole) fall back to for
+  //    icon-only controls.
+  const attrText = extractAccessibleAttr(el);
+  if (attrText) return finalizeLabel(attrText);
+
+  // 3. Nothing statically resolvable. Return empty rather than ever leaking
+  //    raw JSX source into the label - callers already treat a falsy label
+  //    as "no label" (see static/index.ts buildGraph).
+  return "";
+}
+
+/** Walks a JsxElement/JsxFragment's children collecting visible text:
+ *  JsxText nodes, and string-literal JsxExpression children (e.g.
+ *  {"Sign In"}). Non-literal expressions ({someVar}, {cond && <X/>}, calls,
+ *  etc.) are skipped - not statically resolvable, and guessing risks a
+ *  wrong/stale label. Recurses into nested JsxElement/JsxFragment children
+ *  up to `depth` levels so icon+label wrapper patterns
+ *  (<Button><span>Save</span></Button>) still yield a label. */
+function collectVisibleText(container: Node, depth: number): string {
+  const children = Node.isJsxElement(container) || Node.isJsxFragment(container) ? container.getJsxChildren() : [];
+  const parts: string[] = [];
+
+  for (const child of children) {
+    if (Node.isJsxText(child)) {
+      const t = child.getText().replace(/\s+/g, " ").trim();
+      if (t) parts.push(t);
+      continue;
+    }
+    if (Node.isJsxExpression(child)) {
+      const inner = child.getExpression();
+      if (inner && (Node.isStringLiteral(inner) || Node.isNoSubstitutionTemplateLiteral(inner))) {
+        const t = inner.getLiteralText().trim();
+        if (t) parts.push(t);
+      }
+      // Any other expression form (identifier, call, ternary, ...) is not
+      // statically resolvable - skip rather than guess.
+      continue;
+    }
+    if (depth > 0 && (Node.isJsxElement(child) || Node.isJsxFragment(child))) {
+      const nested = collectVisibleText(child, depth - 1);
+      if (nested) parts.push(nested);
+    }
+    // JsxSelfClosingElement children (e.g. an <Icon /> next to a label) and
+    // anything else contribute no visible text.
+  }
+
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/** Reads aria-label / title / alt off a JSX opening/self-closing element. */
+function extractAccessibleAttr(el: JsxOpeningElement | JsxSelfClosingElement): string {
+  const attrs = el.getAttributes().filter((a): a is JsxAttribute => a.getKind() === SyntaxKind.JsxAttribute);
+  for (const name of ACCESSIBLE_NAME_ATTRS) {
+    const attr = attrs.find((a) => a.getNameNode().getText() === name);
+    const init = attr?.getInitializer();
+    if (!init) continue;
+
+    const literal = Node.isJsxExpression(init) ? init.getExpression() : init;
+    if (literal && (Node.isStringLiteral(literal) || Node.isNoSubstitutionTemplateLiteral(literal))) {
+      const t = literal.getLiteralText().trim();
+      if (t) return t;
+    }
+    // aria-label={someExpr} where someExpr isn't a literal - not statically
+    // resolvable, skip.
+  }
+  return "";
+}
+
+/** Collapses whitespace, strips characters that would break the
+ *  `Click "<label>"` wrapper format downstream (static/index.ts wraps this
+ *  in quotes; demo.ts later regex-extracts the first quoted substring), and
+ *  applies the existing 60-char truncation. */
+function finalizeLabel(text: string): string {
+  const clean = text.replace(/\s+/g, " ").replace(/"/g, "'").trim();
+  return clean.length > MAX_LABEL_LENGTH ? clean.slice(0, MAX_LABEL_LENGTH - 3) + "..." : clean;
 }

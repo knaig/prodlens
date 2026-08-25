@@ -294,18 +294,21 @@ back to heuristics.
 
 ## 12. Status / roadmap
 
-**Built**: graph discovery + verification pipeline; LLM synthesis with heuristics;
-parallel execution; GEPA loop; video capture (demo, walkthrough, explain, capture,
-record-screen); real OS cursor + lock + abort + consent; adapter SDK; **adapter
-synthesis** (JIT adapter codegen from a repo); persona intro + result semantics;
-web app (walkthrough studio); docs.
+**Status lives in one place: [spec/traceability.md](../spec/traceability.md).**
+It carries every requirement, use case, gate, and build phase with a verified
+implementation status (`implemented` / `partial` / `spec-only` /
+`not-started`), and its §6 names every case where the spec describes something
+the code does not do yet. This section used to duplicate that as prose and
+went stale; a second roadmap is exactly the drift the spec set is meant to
+prevent.
 
-**Ongoing**: capture hardening; voicera voice adapter as the stream/call proof;
-refining synthesized-adapter runtime reliability.
-
-**Roadmap**: React Router / other static-pass adapters; real import-graph tracing;
-static-pass form detection; semantically-aware scenarios; agent fallback that can
-replan; explorer graph diagram; richer GEPA.
+In brief: graph discovery and the verification pipeline, LLM synthesis with
+heuristic fallback, parallel execution, the GEPA loop, video capture, the real
+OS cursor, the adapter SDK and JIT adapter synthesis, the reverse-spec stage,
+the demo studio, the diagram engine, and the web app are all built. The
+largest open items are live `call` scenes (`D-CALL-1`), wiring the v3 diagram
+renderers into the studio (`D-DIAGV3-1`), and the hosted control plane
+(`D-HOSTED-1`).
 
 See `docs/architecture.md`, `docs/adapters.md`, `docs/cli-reference.md`,
 `docs/data-models.md`, `docs/llm-client.md`, and `docs/voicera.md` for depth.

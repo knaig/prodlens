@@ -1,3 +1,4 @@
+// Spec: FR-VE-2 - see spec/traceability.md
 // Goal-oriented agent fallback (README roadmap): when a PathStep's edge has
 // no resolvable selector/quoted label/href - or the DOM-based resolution in
 // performEdgeAction fails at runtime (element renamed, moved, hidden behind

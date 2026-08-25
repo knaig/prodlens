@@ -1,9 +1,20 @@
 # Prodlens — Technical Specification (v1)
 
 **Version:** 1.1  
-**Status:** Draft  
-**Last Updated:** 2026-08-09  
-**Companion:** Prodlens-Product-Spec.md
+**Status:** Active baseline — partially superseded  
+**Last Updated:** 2026-08-25 (§3 moved to schemas.md; supersession notes added)  
+**Spec root:** [README.md](README.md) · **Companion:** [Prodlens-Product-Spec.md](Prodlens-Product-Spec.md) · **Operative spec:** [Prodlens-v2-Spec.md](Prodlens-v2-Spec.md)
+
+> **Read this first.** This is the v1 technical spec. It remains normative for
+> the verification architecture and pipeline (§2, §4–§9, §11), all traced to
+> code in [traceability.md](traceability.md) §1.
+>
+> Two parts have moved or been superseded:
+> - **§3 (core data models)** now lives in [schemas.md](schemas.md), reconciled
+>   with the shipped code. The deltas are documented there in §10.
+> - **§10 (technology stack)** is superseded by v2 §5.4 for the rendering and
+>   diagram layers.
+> - **§13 (implementation order)** is complete; current sequencing is v2 §14.
 
 ---
 
@@ -55,149 +66,28 @@ It is built on two reinforcing ideas:
 
 ## 3. Core Data Models
 
-```ts
-// ----- Identity & State -----
+> **Moved to [schemas.md](schemas.md).** The type definitions that were inline
+> here in v1.1 are now maintained in one normative place, reconciled with the
+> shipped code in `src/types.ts` and extended with the v2 studio, respec,
+> adapter, metering, and artifact-registry contracts.
+>
+> The v1.1 sketch this section carried had drifted from the implementation in
+> ten documented ways (`source: "both"`, edge provenance and static
+> classification, `PathStep.edgeId` grounding, `PathRunResult`,
+> `GraphAnalysis`, and others). Keeping two copies is what let that happen;
+> [schemas.md §10](schemas.md#10-deviations-from-technical-spec-3-v11) records
+> each deviation and why it exists.
 
-interface Node {
-  id: string;
-  url: string;
-  title?: string;
-  stateSignature: string;          // stable hash of meaningful DOM + key data
-  screenshotPath?: string;
-  isTerminal?: boolean;
-  source: "observed" | "inferred" | "code";
-  metadata?: Record<string, any>;
-}
+| looking for | see |
+| --- | --- |
+| `Node`, `Edge`, `Graph`, `GraphVersion`, `GraphDiff`, `GraphAnalysis` | [schemas.md §2](schemas.md) |
+| `Persona`, `InputScenario`, `PathStep`, `PrioritizedPath`, `PathRunResult` | [schemas.md §2.5](schemas.md) |
+| `Issue`, `VerificationReport`, `InteractionModel` | [schemas.md §2.6](schemas.md) |
+| `TraceFeedback`, `GepaGuidance` | [schemas.md §3](schemas.md) |
+| studio types (`Scene2`, `DemoSpec2`, `NarrationDoc`, `SceneChoreography`) | [schemas.md §5](schemas.md) |
+| `Respec` and friends | [schemas.md §6](schemas.md) |
 
-interface Edge {
-  id: string;
-  from: string;                    // Node.id
-  to: string | null;               // null = broken / no navigation observed
-  action: string;                  // human-readable: "Click 'Checkout'"
-  selector?: string;
-  inputScenarioId?: string;
-  isReturnPath: boolean;
-  status: "working" | "broken" | "untested" | "unreachable" | "missing";
-  error?: string;
-  screenshotPath?: string;
-  evidence?: Evidence[];
-}
-
-interface Evidence {
-  type: "screenshot" | "dom" | "network" | "console" | "log";
-  pathOrValue: string;
-  timestamp: string;
-}
-
-// ----- Personas & Journeys -----
-
-interface Persona {
-  id: string;
-  name: string;
-  description: string;
-  goals: string[];
-  traits?: string[];
-  source: "inferred" | "provided" | "refined";
-}
-
-interface InputScenario {
-  id: string;
-  description: string;
-  values: Record<string, string | number | boolean>;
-  rationale: string;
-  priority: "critical" | "high" | "medium" | "low";
-}
-
-interface PrioritizedPath {
-  id: string;
-  personaId: string;
-  goal: string;
-  steps: PathStep[];
-  inputScenarioIds?: string[];
-  priority: "critical" | "high" | "medium" | "low";
-  reason: string;
-  status: "planned" | "approved" | "running" | "passed" | "failed" | "skipped";
-}
-
-interface PathStep {
-  action: string;
-  expectedNodeId?: string;
-  actualNodeId?: string;
-  status?: "pending" | "passed" | "failed";
-  evidence?: Evidence[];
-}
-
-// ----- Graph Engineering Artifacts -----
-
-interface GraphVersion {
-  id: string;
-  type: "intended" | "actual" | "merged";
-  createdAt: string;
-  parentVersionId?: string;
-  nodes: Record<string, Node>;
-  edges: Edge[];
-  entryPoints: string[];
-  metadata?: Record<string, any>;
-}
-
-interface GraphDiff {
-  fromVersionId: string;
-  toVersionId: string;
-  addedNodes: string[];
-  removedNodes: string[];
-  addedEdges: string[];
-  removedEdges: string[];
-  changedEdges: string[];          // status or target changed
-  missingReturnPaths: string[];    // node or edge ids
-  deadEnds: string[];
-}
-
-// ----- Top-level Artifacts -----
-
-interface InteractionModel {
-  intendedGraph: GraphVersion;
-  actualGraph?: GraphVersion;
-  diff?: GraphDiff;
-  recoveredAt: string;
-  sources: ("live" | "code" | "docs")[];
-}
-
-interface VerificationReport {
-  summary: {
-    nodesCovered: number;
-    edgesCovered: number;
-    brokenTransitions: number;
-    missingReturnPaths: number;
-    deadEnds: number;
-  };
-  issues: Issue[];
-  graphDiff?: GraphDiff;
-  generatedAt: string;
-}
-
-interface Issue {
-  id: string;
-  type: "broken_transition" | "missing_return" | "dead_end" | "unreachable" | "spec_deviation";
-  severity: "critical" | "high" | "medium" | "low";
-  title: string;
-  description: string;
-  nodeIds?: string[];
-  edgeIds?: string[];
-  pathId?: string;
-  evidence?: Evidence[];
-}
-
-// ----- GEPA Support -----
-
-interface TraceFeedback {
-  runId: string;
-  module: "recovery" | "synthesis" | "prioritization" | "diagnosis";
-  score: number;                   // scalar for ranking
-  feedback: string;                // rich natural-language diagnosis
-  traceSummary: string;            // key steps / observations
-  examples?: any[];                // supporting evidence
-}
-```
+The original v1.1 text remains in git history (`git log -- spec/Prodlens-Technical-Spec.md`).
 
 ---
 
@@ -364,6 +254,15 @@ approved
 
 ## 10. Suggested Technology Stack (v1)
 
+> **Partially superseded by v2 §5.4.** The rendering and diagram rows below
+> are historical. Current: **elkjs** for layout, **Remotion** as the render
+> shell (one React tree is both the scrubbable artifact and the exported MP4),
+> and a prodlens-owned SVG renderer for sequence and tutorial-tier diagrams —
+> mermaid's generated SVG is hostile to element addressing and animation, so
+> it survives only for summary-tier stills. The web app is plain Node `http` +
+> SSE (v2 §7), not Next.js. Runtime, Playwright, LLM abstraction, and graph
+> storage rows are unchanged and accurate.
+
 | Layer              | Suggestion                                      |
 |--------------------|-------------------------------------------------|
 | Runtime            | Node.js + TypeScript                            |
@@ -447,6 +346,12 @@ llm:
 ---
 
 ## 13. Implementation Order (Recommended)
+
+> **Complete; superseded by v2 §14.** Items 1–11 shipped (see
+> [traceability.md](traceability.md) §1); item 12, the offline GEPA
+> experimentation harness, is the one open item — tracked as `FR-GEPA-4`
+> (`partial`: feedback targets exist, a labeled training set and scoring
+> harness do not).
 
 1. Project setup + core data models + versioned Graph Store
 2. Basic Playwright crawler (Recovery Engine – live only)

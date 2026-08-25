@@ -40,6 +40,18 @@ export interface DemoStep {
    *  stop), "tour" (down->up so the full page is seen), or false to skip. */
   scroll?: "down" | "tour" | false;
   settleMs?: number;
+  /** An interactive session driven by something outside this renderer (spec
+   *  §4.3). demo.ts knows nothing about what a session IS - it hands the live
+   *  page to opts.onSession and waits. That is what keeps the transport (voice
+   *  over WebSocket, chat over DOM, video over WebRTC) out of core. */
+  session?: SessionRequest;
+}
+
+/** What a session step asks for. `kind` names an op the caller's adapter
+ *  declares; `turns` is the scripted conversation. */
+export interface SessionRequest {
+  kind: string;
+  turns: Array<{ speaker: string; text?: string; bargeIn?: boolean }>;
 }
 
 export interface DemoIntro {
@@ -149,6 +161,11 @@ export interface DemoOptions {
    *  the video is the actual OS cursor. Requires the app window to stay
    *  frontmost during recording. */
   osCursor?: boolean;
+  /** Runs a DemoStep.session against the live recording page. Supplied by the
+   *  caller (studio/render.ts routes it to the product's adapter) so this
+   *  renderer never learns a product's transport. Throwing skips the step the
+   *  same way any other step failure does. */
+  onSession?: (page: import("playwright").Page, session: SessionRequest) => Promise<void>;
 }
 
 export interface DemoScreenplayScene {
@@ -573,6 +590,10 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
     // Narration cursor (seconds relative to t0): no clip may start before the
     // previous one ends, so clips never overlap. The intro owns the opening.
     let cursorSec = 0;
+    // Real recorded-footage floor for the end trim (below) - updated after
+    // every step's hold, whether or not that step's narration succeeded, so a
+    // trailing step with failed TTS never gets its actual footage chopped off.
+    let lastRecordedSec = 0;
     if (introFile && (await existsSync(introFile))) {
       narrated.push({ file: introFile, atSec: 0.3, durSec: introDurSec });
       cursorSec = 0.3 + introDurSec + 0.4;
@@ -594,6 +615,10 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
         const actionDesc = describeStepAction(step);
         try {
           await runStep(page, baseUrl(script), step);
+          if (step.session) {
+            if (!opts.onSession) throw new Error(`step "${step.name}" needs a session (${step.session.kind}) but no session handler was supplied`);
+            await opts.onSession(page, step.session);
+          }
         } catch (e) {
           // An optional step is a branch the app may or may not show (e.g. a
           // confirm panel that only appears sometimes) - skip it, keep going.
@@ -605,10 +630,12 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
           await page.waitForTimeout(200);
           break;
         }
-        // Short wait for the new screen to actually render, then anchor the
-        // narration HERE - so the voice lines up with the screen it describes
-        // instead of leading it through the transition.
-        await page.waitForTimeout(step.settleMs ?? opts.settleMs ?? 400);
+        // Adaptive settle: wait for the network to go quiet (the new screen's
+        // data fetch actually finishing) instead of a flat sleep - a fast
+        // screen resolves almost immediately, a slow one still gets up to the
+        // ceiling below. settleMs/opts.settleMs is now that ceiling, not a
+        // fixed wait every screen pays regardless of how fast it rendered.
+        await page.waitForLoadState("networkidle", { timeout: step.settleMs ?? opts.settleMs ?? 3000 }).catch(() => null);
         const screenReadySec = (Date.now() - t0) / 1000;
 
         let narrate = step.narrate;
@@ -650,6 +677,7 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
         const holdUntilSec = (audioFile && clipDurSec ? narrateAtSec + clipDurSec + 0.3 : (Date.now() - t0) / 1000 + 0.3);
         const remainingHold = holdUntilSec - (Date.now() - t0) / 1000;
         if (remainingHold > 0) await page.waitForTimeout(remainingHold * 1000);
+        lastRecordedSec = holdUntilSec;
 
         scenes.push({ atSec: narrateAtSec, durSec: 0, name: step.name, action: actionDesc, narrate });
         stepsRun++;
@@ -669,6 +697,7 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
       const holdUntilSec = atSec + outroDurSec + 0.6;
       const remainingHold = holdUntilSec - (Date.now() - t0) / 1000;
       if (remainingHold > 0) await page.waitForTimeout(remainingHold * 1000);
+      lastRecordedSec = holdUntilSec;
     }
 
     await page.waitForTimeout(400);
@@ -695,13 +724,22 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
     const shiftSec = Math.max(0, (t0 - recordStart) / 1000);
     for (const n of narrated) n.atSec += shiftSec;
     for (const sc of scenes) sc.atSec += shiftSec;
+    if (lastRecordedSec) lastRecordedSec += shiftSec;
 
     const totalSec = await probeDuration(rawVideo);
 
     // Trim the video to end ~1.2s after the last narration clip finishes, so
-    // the output never trails off into minutes of static silent screen.
-    const lastClipEnd = narrated.length ? Math.max(...narrated.map((n) => n.atSec + n.durSec)) : totalSec;
-    const endSec = Math.min(totalSec, lastClipEnd + 1.2);
+    // the output never trails off into minutes of static silent screen. Floor
+    // it at lastRecordedSec too - a step whose TTS failed still has real
+    // recorded footage that `narrated` alone wouldn't account for, and
+    // trimming to an earlier narrated clip would silently cut that off.
+    const lastClipEnd = Math.max(
+      lastRecordedSec,
+      narrated.length ? Math.max(...narrated.map((n) => n.atSec + n.durSec)) : 0,
+    ) || totalSec;
+    // 2s tail after the last narration clip: enough for a TTS provider's own
+    // trailing silence/fade to finish audibly instead of getting clipped.
+    const endSec = Math.min(totalSec, lastClipEnd + 2);
 
     const screenplay = buildScreenplay(script, scenes, endSec);
     const captionStaging = await writeCaptionFiles(script, scenes, staging);
@@ -755,6 +793,7 @@ function replaceExt(path: string, _ext: string): string {
 
 /** Human-readable description of what a step did, for the screenplay. */
 function describeStepAction(step: DemoStep): string | undefined {
+  if (step.session) return `Run a ${step.session.kind} session (${step.session.turns.length} turn(s))`;
   if (step.goto) return `Navigate to ${step.goto}`;
   if (step.click) return `Click "${step.click}"`;
   if (step.selector) return `Interact with ${step.selector}`;
@@ -1116,6 +1155,16 @@ export function synthesizeDemoScript(graph: GraphVersion, paths: PrioritizedPath
 }
 
 async function runStep(page: Page, baseUrl: string, step: DemoStep): Promise<void> {
+  // A step with BOTH click and goto means "click this label to arrive at
+  // that screen" (a real user navigates by clicking, not typing a URL) - try
+  // the click first so the cursor actually moves, falling back to a direct
+  // goto only if the label never shows up.
+  if (step.click && step.goto && !step.fill && !step.selector && !step.pointer) {
+    if (await tryClick(page, step)) return;
+    const target = step.goto.split("?")[0].split("#")[0];
+    await page.goto(`${baseUrl}${target}`, { waitUntil: "domcontentloaded", timeout: 20000 });
+    return;
+  }
   if (step.goto) {
     const target = step.goto.split("?")[0].split("#")[0];
     await page.goto(`${baseUrl}${target}`, { waitUntil: "domcontentloaded", timeout: 20000 });
@@ -1153,6 +1202,11 @@ async function runStep(page: Page, baseUrl: string, step: DemoStep): Promise<voi
       }
     }
     await page.waitForTimeout(200);
+    // A step can carry both fill and click (e.g. the login scene's "fill the
+    // form, then click Sign in") - returning here unconditionally silently
+    // dropped that click (and its cursor glide) on every such step. Submit
+    // via the click now that the fields are filled.
+    if (step.click) await tryClick(page, step);
     return;
   }
   if (step.selector) {
@@ -1166,46 +1220,56 @@ async function runStep(page: Page, baseUrl: string, step: DemoStep): Promise<voi
     return;
   }
   if (step.click) {
-    // The target may take a while to EXIST at all (e.g. a button that only
-    // renders once a model call finishes) - poll the whole strategy ladder
-    // until the step's deadline instead of failing on one instant pass.
-    // clickTimeoutMs on the step raises the deadline for known-slow screens.
-    const deadline = Date.now() + (step.clickTimeoutMs ?? 8000);
-    for (;;) {
-      const byLink = page.getByRole("link", { name: step.click, exact: true }).first();
-      if (await byLink.isVisible().catch(() => false)) {
-        const c = await elementCenter(page, byLink);
-        return c ? humanClick(page, c.x, c.y) : byLink.click({ timeout: 8000 });
-      }
-      const byButton = page.getByRole("button", { name: step.click, exact: true }).first();
-      if (await byButton.isVisible().catch(() => false)) {
-        const c = await elementCenter(page, byButton);
-        return c ? humanClick(page, c.x, c.y) : byButton.click({ timeout: 8000 });
-      }
-      // Fuzzy fallback: prefer a link whose text contains the label (a link has a
-      // navigable href), then a button, then any element. Clicking an arbitrary
-      // element that "looks like" the label is what silently no-ops a step like
-      // `click: "Studio"` when no exact match exists - prefer real navigation.
-      const fuzzyLink = page.locator(`a:has-text("${cssEscape(step.click)}")`).first();
-      if (await fuzzyLink.isVisible().catch(() => false)) {
-        const c = await elementCenter(page, fuzzyLink);
-        return c ? humanClick(page, c.x, c.y) : fuzzyLink.click({ timeout: 8000 });
-      }
-      const fuzzyButton = page.locator(`button:has-text("${cssEscape(step.click)}")`).first();
-      if (await fuzzyButton.isVisible().catch(() => false)) {
-        const c = await elementCenter(page, fuzzyButton);
-        return c ? humanClick(page, c.x, c.y) : fuzzyButton.click({ timeout: 8000 });
-      }
-      const byText = page.getByText(step.click, { exact: false }).first();
-      if (await byText.isVisible().catch(() => false)) {
-        const c = await elementCenter(page, byText);
-        return c ? humanClick(page, c.x, c.y) : byText.click({ timeout: 8000 });
-      }
-      if (Date.now() > deadline) {
-        throw new Error(`click target "${step.click}" never appeared within ${step.clickTimeoutMs ?? 8000}ms`);
-      }
-      await page.waitForTimeout(1000);
+    if (await tryClick(page, step)) return;
+    throw new Error(`click target "${step.click}" never appeared within ${step.clickTimeoutMs ?? 8000}ms`);
+  }
+}
+
+/** Poll the whole label-matching strategy ladder until the step's deadline
+ *  (a target may take a while to EXIST at all - e.g. a button that only
+ *  renders once a model call finishes) - clickTimeoutMs raises the deadline
+ *  for known-slow screens. Returns false (never throws) once the deadline
+ *  passes with no match, so a caller can fall back to a direct goto. */
+async function tryClick(page: Page, step: DemoStep): Promise<boolean> {
+  const label = step.click!;
+  const deadline = Date.now() + (step.clickTimeoutMs ?? 8000);
+  for (;;) {
+    const byLink = page.getByRole("link", { name: label, exact: true }).first();
+    if (await byLink.isVisible().catch(() => false)) {
+      const c = await elementCenter(page, byLink);
+      if (c) await humanClick(page, c.x, c.y); else await byLink.click({ timeout: 8000 });
+      return true;
     }
+    const byButton = page.getByRole("button", { name: label, exact: true }).first();
+    if (await byButton.isVisible().catch(() => false)) {
+      const c = await elementCenter(page, byButton);
+      if (c) await humanClick(page, c.x, c.y); else await byButton.click({ timeout: 8000 });
+      return true;
+    }
+    // Fuzzy fallback: prefer a link whose text contains the label (a link has a
+    // navigable href), then a button, then any element. Clicking an arbitrary
+    // element that "looks like" the label is what silently no-ops a step like
+    // `click: "Studio"` when no exact match exists - prefer real navigation.
+    const fuzzyLink = page.locator(`a:has-text("${cssEscape(label)}")`).first();
+    if (await fuzzyLink.isVisible().catch(() => false)) {
+      const c = await elementCenter(page, fuzzyLink);
+      if (c) await humanClick(page, c.x, c.y); else await fuzzyLink.click({ timeout: 8000 });
+      return true;
+    }
+    const fuzzyButton = page.locator(`button:has-text("${cssEscape(label)}")`).first();
+    if (await fuzzyButton.isVisible().catch(() => false)) {
+      const c = await elementCenter(page, fuzzyButton);
+      if (c) await humanClick(page, c.x, c.y); else await fuzzyButton.click({ timeout: 8000 });
+      return true;
+    }
+    const byText = page.getByText(label, { exact: false }).first();
+    if (await byText.isVisible().catch(() => false)) {
+      const c = await elementCenter(page, byText);
+      if (c) await humanClick(page, c.x, c.y); else await byText.click({ timeout: 8000 });
+      return true;
+    }
+    if (Date.now() > deadline) return false;
+    await page.waitForTimeout(1000);
   }
 }
 

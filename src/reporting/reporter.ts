@@ -1,3 +1,4 @@
+// Spec: FR-GE-4, FR-UI-4 - see spec/traceability.md
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Graph, GraphAnalysis, VerificationReport } from "../types.js";

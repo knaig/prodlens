@@ -1,8 +1,23 @@
 # Prodlens — Product Specification (v1)
 
 **Version:** 1.1  
-**Status:** Draft  
-**Last Updated:** 2026-08-09
+**Status:** Active baseline — partially superseded  
+**Last Updated:** 2026-08-25 (traceability IDs added; content unchanged since 2026-08-09)  
+**Spec root:** [README.md](README.md) · **Companion:** [Prodlens-Technical-Spec.md](Prodlens-Technical-Spec.md) · **Operative spec:** [Prodlens-v2-Spec.md](Prodlens-v2-Spec.md)
+
+> **Read this first.** This is the v1 product spec: Prodlens as a specification
+> recovery and navigational verification system. It remains normative for
+> discovery and verification requirements (§5.1–§5.7, §6), and every one of
+> them is traced to code in [traceability.md](traceability.md) §1.
+>
+> It is **partially superseded** by [Prodlens-v2-Spec.md](Prodlens-v2-Spec.md),
+> which adds demo production, the reverse-spec stage, HITL gates, the diagram
+> engine, and the web app. Specifically: **§3 (v1 scope)** is superseded by v2
+> §2/§4/§5, and **§5.4 (presentation)** by v2 §7. Where the two disagree, v2
+> wins (spec [README §2](README.md#2-precedence)).
+>
+> Requirements here carry stable IDs (`FR-<area>-<n>`, `NFR-<n>`). Cite the ID,
+> not the section number.
 
 ---
 
@@ -40,6 +55,11 @@ Given a web application (URL + optional codebase), the system must:
 ---
 
 ## 3. v1 Scope
+
+> **Superseded by v2 §2, §4, §5.** v1 scoped verification only. Demo
+> production, the reverse-spec stage, and architecture explainers are now
+> first-class capabilities. The "Out of Scope" list below is v1's, not the
+> product's current boundary.
 
 ### In Scope
 
@@ -136,33 +156,38 @@ Given a web application (URL + optional codebase), the system must:
 
 ### 5.1 Reverse Engineering
 The system must recover:
-- Screens / major UI states (with screenshots and state signatures)
-- Interactive elements and observed/inferred transitions
-- An Intended Navigation Graph (first-class, versionable)
-- A small set of core personas and critical journeys
-- Light signals of primary user goals
+- **FR-RE-1** — Screens / major UI states (with screenshots and state signatures)
+- **FR-RE-2** — Interactive elements and observed/inferred transitions
+- **FR-RE-3** — An Intended Navigation Graph (first-class, versionable)
+- **FR-RE-4** — A small set of core personas and critical journeys
+- **FR-RE-5** — Light signals of primary user goals
 
 Sources: live application (DOM, screenshots, routing, network) + optional codebase + optional existing docs.
 
 ### 5.2 Input Scenario Control
-- Detect points where user input affects navigation or downstream state
-- Avoid exhaustive combinatorial explosion
-- Select only high-value input variations using:
+- **FR-IS-1** — Detect points where user input affects navigation or downstream state
+- **FR-IS-2** — Avoid exhaustive combinatorial explosion
+- **FR-IS-3** — Select only high-value input variations using:
   - Persona/goal importance
   - Equivalence partitioning & boundaries
   - Observed impact on reachable states
   - LLM judgment for minimal high-signal sets
-- Explicitly show which scenarios were chosen and why others were deprioritized
+- **FR-IS-4** — Explicitly show which scenarios were chosen and why others were deprioritized
 
 ### 5.3 Verification Engine
-- Execute prioritized journeys against the live app
-- Support deterministic steps and goal-oriented agent fallback
-- Record actual transitions, screenshots, and outcomes
-- Detect broken/incorrect transitions, missing return paths, dead ends, and unreachable intended states
-- Emit structured traces and natural-language feedback suitable for GEPA-style reflection
+- **FR-VE-1** — Execute prioritized journeys against the live app
+- **FR-VE-2** — Support deterministic steps and goal-oriented agent fallback
+- **FR-VE-3** — Record actual transitions, screenshots, and outcomes
+- **FR-VE-4** — Detect broken/incorrect transitions, missing return paths, dead ends, and unreachable intended states
+- **FR-VE-5** — Emit structured traces and natural-language feedback suitable for GEPA-style reflection
 
 ### 5.4 Interactive Presentation
-**Live Graph / Tree View**
+
+> **Superseded by v2 §7 (web app).** The four views below remain the
+> requirements (`FR-UI-1`–`FR-UI-4`); their delivery surface is now the web
+> app, not the standalone viewers sketched here.
+
+**FR-UI-1 — Live Graph / Tree View**
 - Nodes = screens/states
 - Edges = user actions
 - Visual status encoding (working / broken / untested / missing return)
@@ -170,57 +195,61 @@ Sources: live application (DOM, screenshots, routing, network) + optional codeba
 - Filters by persona, priority, issue type
 - Support for viewing Intended vs Actual overlays
 
-**Path Explorer**
+**FR-UI-2 — Path Explorer**
 - Step-by-step interactive view of important journeys
 - Screenshots + action taken + expected vs actual
 - Feels like a clickable prototype for interesting/broken paths
 
-**Mindmap / Hierarchical Views**
+**FR-UI-3 — Mindmap / Hierarchical Views**
 - Personas → goals → journeys
 - Product areas → flows
 - Easy navigation between high-level structure and detail
 
-**Markdown Viewer**
+**FR-UI-4 — Markdown Viewer**
 - Clean rendering of recovered specs and planned journeys
 - Support for links into graph nodes/paths
 - Readable structured documents for review gates
 
 ### 5.5 Manual Review Gates (Optional)
-Users can insert approval steps:
-- After reverse engineering (review recovered Interaction Spec + Graph)
-- After prioritization (approve/edit planned journeys and input scenarios)
-- Before large verification runs
 
-Actions: Approve / Edit / Reject & regenerate with guidance.
+> Realized as the v2 gate set (v2 §6, `G1`–`G8`); the requirements below are
+> the contract those gates must satisfy.
+
+Users can insert approval steps:
+- **FR-HITL-1** — After reverse engineering (review recovered Interaction Spec + Graph)
+- **FR-HITL-2** — After prioritization (approve/edit planned journeys and input scenarios)
+- **FR-HITL-3** — Before large verification runs
+
+**FR-HITL-4** — Actions: Approve / Edit / Reject & regenerate with guidance.
 
 ### 5.6 Graph Engineering Requirements
-- The navigation graph is a first-class artifact: versioned, inspectable, diffable, and the primary object of both reasoning and UI.
-- Explicit distinction between Intended Graph and Actual Graph.
-- Graph algorithms used for:
+- **FR-GE-1** — The navigation graph is a first-class artifact: versioned, inspectable, diffable, and the primary object of both reasoning and UI.
+- **FR-GE-2** — Explicit distinction between Intended Graph and Actual Graph.
+- **FR-GE-3** — Graph algorithms used for:
   - Return-path detection
   - Dead-end identification
   - Coverage measurement
   - Path prioritization support
-- Graph diffs form a core part of the verification report.
+- **FR-GE-4** — Graph diffs form a core part of the verification report.
 
 ### 5.7 GEPA Foundations
-- Recovery and Synthesis modules are designed as optimizable components with clear inputs/outputs.
-- Verification runs produce rich traces + diagnostic feedback (not only scalar scores).
-- The system supports offline GEPA-style reflective optimization of key prompts/modules against a small set of labeled or synthetic apps.
-- Metrics and feedback functions are defined so that improvements in recovery quality and prioritization quality can be measured and optimized.
+- **FR-GEPA-1** — Recovery and Synthesis modules are designed as optimizable components with clear inputs/outputs.
+- **FR-GEPA-2** — Verification runs produce rich traces + diagnostic feedback (not only scalar scores).
+- **FR-GEPA-3** — The system supports offline GEPA-style reflective optimization of key prompts/modules against a small set of labeled or synthetic apps.
+- **FR-GEPA-4** — Metrics and feedback functions are defined so that improvements in recovery quality and prioritization quality can be measured and optimized.
 
 ---
 
 ## 6. Non-Functional Requirements
 
-- Works on modern SPAs (client-side routing, dynamic content)
-- Supports authenticated areas (credentials / test accounts)
-- Runnable locally and in CI
-- Parallel path execution
-- Transparent inference (user can inspect why something was inferred or flagged)
-- Graceful handling of incomplete recovered models
-- Real-time or near-real-time updates to the graph during execution
-- Graph artifacts are durable and queryable across runs
+- **NFR-1** — Works on modern SPAs (client-side routing, dynamic content)
+- **NFR-2** — Supports authenticated areas (credentials / test accounts)
+- **NFR-3** — Runnable locally and in CI
+- **NFR-4** — Parallel path execution
+- **NFR-5** — Transparent inference (user can inspect why something was inferred or flagged)
+- **NFR-6** — Graceful handling of incomplete recovered models
+- **NFR-7** — Real-time or near-real-time updates to the graph during execution
+- **NFR-8** — Graph artifacts are durable and queryable across runs
 
 ---
 

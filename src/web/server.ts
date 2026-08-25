@@ -1,3 +1,4 @@
+// Spec: v2 §7 P1-P7 - see spec/traceability.md
 // Prodlens web app - a self-contained server for running LLM-drafted product
 // walkthroughs from the browser. Serves a single-page UI, runs a walkthrough
 // in-process, streams progress over SSE, answers the screen-capture consent

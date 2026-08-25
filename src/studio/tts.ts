@@ -1,3 +1,4 @@
+// Spec: v2 §4.4 (PM2) - see spec/traceability.md
 // Narration casting (spec v2 §4.4): voice + style as first-class fields.
 // A style prompt (e.g. "Indian English accent, warm") is applied via Gemini's
 // style-promptable TTS; without a style (or without a key) this defers to the

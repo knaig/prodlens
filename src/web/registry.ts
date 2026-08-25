@@ -1,3 +1,4 @@
+// Spec: v2 §7 P1 - see spec/traceability.md
 // Project registry (P1): data/registry.json holds project configs; per-project
 // secrets live in data/projects/<id>/secrets.json (gitignored) and are never
 // echoed back to the browser.

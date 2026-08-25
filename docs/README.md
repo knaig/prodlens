@@ -1,11 +1,17 @@
 # prodlens documentation
 
+> **Docs describe, the spec decides.** These pages explain how prodlens works
+> today. The normative specification lives in [`spec/`](../spec/README.md) -
+> start at its root index for the document map, precedence rules, and the
+> requirement/code trace matrix. Where a doc here disagrees with `spec/`, the
+> spec wins and the doc is the bug.
+
 | page | what it covers |
 | --- | --- |
 | [product.md](product.md) | the complete product description - start here |
 | [architecture.md](architecture.md) | component map, control flow, data flow, concurrency & auth |
 | [cli-reference.md](cli-reference.md) | every command + flags, demo/explain screenplay formats |
-| [data-models.md](data-models.md) | Graph/Node/Edge/GraphVersion/Persona/Path/Scenario/GEPA |
+| [data-models.md](data-models.md) | orientation on the core types - normative definitions are in [spec/schemas.md](../spec/schemas.md) |
 | [llm-client.md](llm-client.md) | the one OpenAI-compatible client, models, TTS chain |
 | [extension-guide.md](extension-guide.md) | add a command, a discovery pass, a TTS backend, an LLM consumer |
 | [adapters.md](adapters.md) | adapters + JIT adapter synthesis (LLM codes the SDK from a product's repo) |

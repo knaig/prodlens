@@ -1,3 +1,4 @@
+// Spec: NFR-2, v2 §8 - see spec/traceability.md
 // Auth handling for the live crawler. "Log in once per portal": a session is
 // established once and cached to disk via Playwright's storageState, reused
 // across every subsequent run until it's proven stale.
@@ -25,7 +26,7 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Browser, BrowserContext } from "playwright";
+import type { Browser, BrowserContext, Locator, Page } from "playwright";
 import { clerkSetup, setupClerkTestingToken } from "@clerk/testing/playwright";
 
 export interface AuthConfig {
@@ -286,6 +287,26 @@ async function performSignup(context: BrowserContext, config: AuthConfig): Promi
   await page.close();
 }
 
+/** Fill a field the way a real user would (click, keyboard-type), then verify
+ *  the value actually stuck before moving on. A plain .fill() sets the DOM
+ *  value directly - if React finishes hydrating a moment later, it reconciles
+ *  the controlled input back to its pre-fill (empty) state and the typed
+ *  value silently vanishes. Fine on an instant local dev server; a real
+ *  deployed app's hydration can lag enough for this to bite (confirmed live:
+ *  the password field kept its value, the email field above it didn't).
+ *  Falls back to a networkidle-gated .fill() (fires real input events post-
+ *  hydration) if the keyboard type didn't take. */
+async function fillHydrationSafe(page: Page, locator: Locator, value: string): Promise<void> {
+  await locator.click({ timeout: 8000 }).catch(() => null);
+  await locator.focus().catch(() => null);
+  await page.keyboard.type(value, { delay: 30 }).catch(() => null);
+  const got = await locator.inputValue().catch(() => null);
+  if (got !== value) {
+    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => null);
+    await locator.fill(value, { timeout: 4000 }).catch(() => null);
+  }
+}
+
 /** Generic UI login for apps with their own auth (JWT in localStorage, no
  *  Clerk): fill email/password on the sign-in page, click the submit button,
  *  and wait for the session to establish. Works for any app whose sign-in is a
@@ -314,22 +335,19 @@ async function performCustomLogin(context: BrowserContext, config: AuthConfig): 
     }).catch(() => null);
   }
 
-  // Email field: id/name first, then type=email, then label.
-  await page
-    .locator("#email, #emailAddress, #identifier-field, input[name='email'], input[type='email']")
-    .first()
-    .fill(email, { timeout: 8000 })
-    .catch(async () => {
-      await page.getByLabel(/email/i).first().fill(email, { timeout: 8000 });
-    });
+  // Email field: id/name first, then type=email, then label. Fill is
+  // hydration-safe (see fillHydrationSafe) - a plain .fill() can lose its
+  // value if the framework finishes hydrating a moment after the fill, which
+  // reconciles the controlled input back to its initial empty state. Fine on
+  // an instant local dev server; a real deployed app's hydration can lag
+  // enough for this to bite (confirmed live: password stuck, email didn't).
+  const emailLocator = page.locator("#email, #emailAddress, #identifier-field, input[name='email'], input[type='email']").first();
+  if (await emailLocator.count()) await fillHydrationSafe(page, emailLocator, email);
+  else await fillHydrationSafe(page, page.getByLabel(/email/i).first(), email);
   // Password field.
-  await page
-    .locator("#password, #password-field, input[name='password'], input[type='password']")
-    .first()
-    .fill(password, { timeout: 8000 })
-    .catch(async () => {
-      await page.getByLabel(/password/i).first().fill(password, { timeout: 8000 });
-    });
+  const passwordLocator = page.locator("#password, #password-field, input[name='password'], input[type='password']").first();
+  if (await passwordLocator.count()) await fillHydrationSafe(page, passwordLocator, password);
+  else await fillHydrationSafe(page, page.getByLabel(/password/i).first(), password);
 
   // Submit: a button with an explicit loginButton selector, else role name.
   if (config.loginButton) {

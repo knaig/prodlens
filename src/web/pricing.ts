@@ -1,3 +1,4 @@
+// Spec: v2 §13.10 (§12.3 superseded) - see spec/traceability.md
 // SaaS pricing model (spec v2 §13). Prices in USD/month; quotas per month.
 // COGS figures derive from usage/ledger UNIT_COST estimates so the admin page
 // can show margin per tier honestly.

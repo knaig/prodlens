@@ -1,3 +1,4 @@
+// Spec: v2 §7 P7, §6 G7 - see spec/traceability.md
 // Onboarding preflight (spec v2 §7 P7): each check returns ok + a fix hint.
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";

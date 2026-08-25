@@ -1,3 +1,4 @@
+// Spec: v2 §4, §13.8 (artifact registry) - see spec/traceability.md
 // Studio persistence: per-project script.md + demo-spec.json + narration.json +
 // gaps.json + rendered videos under data/projects/<id>/studio/.
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";

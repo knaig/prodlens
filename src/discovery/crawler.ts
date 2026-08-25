@@ -1,3 +1,4 @@
+// Spec: FR-RE-1, FR-RE-2, NFR-1 - see spec/traceability.md
 // Live discovery: BFS over the running app with a real browser. This is what
 // resolves what the static pass can't - template-literal-built hrefs, actual
 // click behavior, runtime auth redirects - because it reads the real
@@ -59,6 +60,14 @@ export async function runLiveCrawl(opts: CrawlOptions): Promise<CrawlResult> {
       // Let async-rendered nav (SPA shells, client-side layouts) settle before
       // reading the DOM - some apps paint the sidebar after domcontentloaded.
       await page.waitForTimeout(900);
+      // An authenticated visit to a public-looking route (e.g. "/" doubling
+      // as the login page) can client-side redirect only after an auth-check
+      // API call resolves - instant on a local dev server, but real network
+      // latency to a deployed app can outlast the flat 900ms above, so the
+      // crawler reads the pre-redirect (logged-out) markup and never
+      // discovers anything past it. Bounded wait for the network to go quiet
+      // covers that redirect without hanging on an app with background polling.
+      await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => null);
 
       const currentUrl = page.url();
       const title = await page.title().catch(() => "");

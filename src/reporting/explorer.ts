@@ -1,3 +1,4 @@
+// Spec: FR-UI-1, FR-UI-2, FR-UI-3 - see spec/traceability.md
 // Interactive graph/path explorer UI (README roadmap): a single
 // self-contained HTML file (no server, no CDN deps) with the graph, its
 // analysis, and any prioritized paths/results embedded as JSON. Deliberately

@@ -1,3 +1,4 @@
+// Spec: FR-RE-4, FR-IS-2, FR-IS-3, FR-GEPA-1 - see spec/traceability.md
 // Synthesis Engine (spec sections 3/8, tech spec Stage 3): turns the
 // recovered intended graph into personas + PrioritizedPath[]. Every step in
 // a path is grounded in a real edge from the intended graph (edgeId), found

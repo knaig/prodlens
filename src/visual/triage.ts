@@ -1,3 +1,4 @@
+// Spec: v2 §2.2 QA5 - see spec/traceability.md
 // Visual QA pass (src/llm/local.ts + a vision-capable LLM like qwen-vl served
 // by an OpenAI-compatible endpoint). Each node's already-captured screenshot
 // gets one image + one question: is anything VISIBLY broken here? Catches what

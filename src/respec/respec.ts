@@ -1,3 +1,4 @@
+// Spec: v2 §3 (ENG3, ENG4) - see spec/traceability.md
 // Reverse-engineered spec (spec v2 §3): read repo + docs + discovery graph and
 // write what the product actually is - capability inventory, service topology,
 // key flows, drift vs docs - as respec/spec.json + spec.md. LLM-drafted when an

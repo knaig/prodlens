@@ -1,3 +1,4 @@
+// Spec: v2 §13.10 (runner protocol v1) - see spec/traceability.md
 // ProdLens runner agent (spec 13.10, runner protocol v1): polls the cloud
 // control plane for jobs, executes them with the local engine, streams logs,
 // uploads artifacts to Blob, and reports completion. One codebase for both

@@ -1,3 +1,4 @@
+// Spec: v2 §7 P1-P7 - see spec/traceability.md
 // Prodlens web app UI. Zero-dependency single page, designed as a product:
 // left rail navigation, per-project overview dashboard, visual pipeline
 // stepper, storyboard cards, inline video players, and a real console drawer.

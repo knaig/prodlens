@@ -1,3 +1,4 @@
+// Spec: v2 §4 (PM1, PM5) - see spec/traceability.md
 // DemoSpec2 renderer (spec v2 §4): scenes -> segments -> one MP4, with
 // narration.json + choreography.json emitted as first-class artifacts.
 // Browser scenes (card/login/screen/call) compile to the proven DemoScript
@@ -8,6 +9,9 @@ import { renderProductDemo, type DemoScript, type DemoStep } from "../execution/
 import { probeDuration } from "../execution/explain.js";
 import type { Respec } from "../respec/respec.js";
 import { renderDiagramScene, renderSequenceScene } from "./diagram.js";
+import { listAdapters, loadExternalAdapter } from "../adapters/engine.js";
+import "../adapters/session-dom-adapter.js"; // registers the reference session adapter at import time
+import type { ProdlensAdapter } from "../adapters/types.js";
 import { audienceById, type DemoSpec2, type NarrationDoc, type Scene2, type SceneChoreography } from "./types.js";
 import { spawn } from "node:child_process";
 
@@ -35,6 +39,21 @@ type Segment =
   | { kind: "browser"; scenes: Scene2[] }
   | { kind: "diagram"; scene: Scene2 };
 
+/** The adapter that owns a session op (spec §4.3): the op is adapter-defined,
+ *  so core matches on what adapters declare rather than knowing any op itself.
+ *  `spec.adapter` pins one explicitly when several could serve. */
+function findSessionAdapter(sessionKind: string, spec: DemoSpec2) {
+  const declares = (a: ProdlensAdapter) =>
+    a.primitives.some((p) => p.op === sessionKind) || a.sceneTypes.some((s) => s.id === sessionKind);
+  const all = listAdapters();
+  // `spec.adapter` may be an id or the path the adapter was loaded from, in
+  // which case the loaded adapter's own id won't match it - fall back to
+  // whoever declares the op rather than refusing to run.
+  const pinned = spec.adapter ? all.find((a) => a.id === spec.adapter) : undefined;
+  if (pinned) return declares(pinned) ? pinned : undefined;
+  return all.find(declares);
+}
+
 function lineFor(narration: NarrationDoc, scene: Scene2): string | undefined {
   const id = scene.narrationIds?.[0];
   const line = narration.lines.find((l) => l.id === id) ?? narration.lines.find((l) => l.sceneId === scene.id);
@@ -57,12 +76,20 @@ function sceneToSteps(scene: Scene2, narration: NarrationDoc, auth: RenderInputs
     ];
   }
   if (scene.type === "call") {
-    const steps: DemoStep[] = [{ name: scene.id + "-open", goto: scene.agentPath ?? "/", narrate, scroll: false, settleMs: 4000 }];
-    if (scene.startClick) steps.push({ name: scene.id + "-start", click: scene.startClick, scroll: false, settleMs: 1500, optional: true });
-    const turns = Math.max(1, scene.micWav?.length ?? 1);
-    steps.push({ name: scene.id + "-conversation", scroll: false, settleMs: (scene.turnGapMs ?? 9000) * turns });
-    if (scene.endClick) steps.push({ name: scene.id + "-end", click: scene.endClick, scroll: false, settleMs: 1200, optional: true });
-    return steps;
+    // Transport-agnostic (spec §4.3): navigate to the scene's page, then hand
+    // the live page to the product's adapter to run the conversation. Nothing
+    // here knows whether the session is voice, video, or chat.
+    return [
+      {
+        name: scene.id,
+        goto: scene.goto,
+        click: scene.click,
+        narrate,
+        scroll: false,
+        settleMs: scene.settleMs ?? 4000,
+        session: { kind: scene.sessionKind!, turns: scene.turns ?? [] },
+      },
+    ];
   }
   // screen (and artifact-as-screen: show the artifact's page/screenshot path)
   return [
@@ -88,6 +115,17 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
   const skipped: Array<{ sceneId: string; reason: string }> = [];
   const choreographies: SceneChoreography[] = [];
 
+  // A product's adapter lives in the product's own repo (spec §1.1), so
+  // `spec.adapter` may be a path rather than an already-registered id. Load it
+  // before any scene is partitioned, so session scenes can find it.
+  if (spec.adapter && !listAdapters().some((a) => a.id === spec.adapter)) {
+    try {
+      await loadExternalAdapter(spec.adapter);
+    } catch (e) {
+      log(`[studio] could not load adapter "${spec.adapter}": ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
   // ---- partition scenes into segments ----
   const segments: Segment[] = [];
   for (const scene of spec.scenes) {
@@ -99,9 +137,20 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
       segments.push({ kind: "diagram", scene });
       continue;
     }
-    if (scene.type === "call" && !scene.micWav?.length) {
-      // A call scene without caller audio can still run (agent greets), but warn.
-      log(`[studio] call scene ${scene.id} has no micWav - the agent side will carry the conversation`);
+    if (scene.type === "call") {
+      // Blocked-resource policy (spec §4.3): a session with no adapter to run
+      // it is skipped with a note, never a crashed render.
+      if (!scene.sessionKind) {
+        skipped.push({ sceneId: scene.id, reason: "call scene has no sessionKind - name the session op the product's adapter declares" });
+        continue;
+      }
+      if (!findSessionAdapter(scene.sessionKind, spec)) {
+        skipped.push({
+          sceneId: scene.id,
+          reason: `no registered adapter declares the session op "${scene.sessionKind}" - load the product's adapter (see docs/adapters.md)`,
+        });
+        continue;
+      }
     }
     if (scene.type === "artifact" && !scene.goto && !scene.artifactRel) {
       skipped.push({ sceneId: scene.id, reason: "artifact scene has no goto/artifactRel" });
@@ -166,7 +215,6 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
     const steps = stepScenes.flatMap((s) => (s.type === "card"
       ? [{ name: s.id, narrate: lineFor(narration, s), scroll: false as const, settleMs: 2500 }]
       : sceneToSteps(s, narration, inputs.auth)));
-    const callScene = stepScenes.find((s) => s.type === "call");
     const script: DemoScript = {
       title: spec.title,
       baseUrl: spec.baseUrl,
@@ -177,7 +225,6 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
       steps,
       autoNarrate: false,
       scroll: false,
-      fakeMicWav: callScene?.micWav?.[0],
     };
     log(`[studio] segment ${si}: browser (${stepScenes.map((s) => s.type).join(",")})`);
     const segOut = join(staging, `seg-${si}.mp4`);
@@ -187,6 +234,22 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
       noVoice: inputs.draft ?? false,
       noCaptions: false,
       ttsCmd: spec.voice?.style ? styledTtsCmd(spec.voice.name ?? "Kore", spec.voice.style) : undefined,
+      // The session bridge (spec §4.3): the renderer hands us the live page,
+      // we hand it to the adapter that declared this op. Artifacts the session
+      // captures (recording, transcript) land in the scene's work dir, where
+      // later `artifact` scenes address them.
+      onSession: async (page, session) => {
+        const adapter = findSessionAdapter(session.kind, spec);
+        if (!adapter) throw new Error(`no adapter declares session op "${session.kind}"`);
+        const workDir = join(staging, `session-${si}`);
+        mkdirSync(workDir, { recursive: true });
+        const res = await adapter.execute(
+          { op: session.kind, args: { turns: session.turns } },
+          { surface: { description: spec.title }, page, workDir, manifest: spec.manifest ?? {} },
+        );
+        if (!res.ok) throw new Error(res.error ?? `session "${session.kind}" failed`);
+        log(`[studio] session ${session.kind}: ok (${res.artifacts?.length ?? 0} artifact(s))`);
+      },
     });
     if (result.error) log(`[studio] segment ${si} finished with note: ${result.error}`);
     parts.push(inputs.draft && result.silentVideoPath ? result.silentVideoPath : result.videoPath);

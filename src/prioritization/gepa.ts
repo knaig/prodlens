@@ -1,3 +1,4 @@
+// Spec: FR-GEPA-3, FR-VE-5 - see spec/traceability.md
 // GEPA offline optimization loop (README roadmap) over TraceFeedback:
 // `report` (index.ts) accumulates TraceFeedback into <dir>/traces.json;
 // the `gepa` command reflects on the accumulated traces - via an LLM if

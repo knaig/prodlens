@@ -1,3 +1,4 @@
+// Spec: spec/schemas.md §2-3 - see spec/traceability.md
 // Core data models shared by every stage: static pre-pass, live crawler,
 // synthesis, executor, analysis, and reporter all read/write these shapes.
 // Aligned to spec/Prodlens-Technical-Spec section 3, with two
