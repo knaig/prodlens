@@ -33,6 +33,9 @@ export interface RenderResult {
   narrationPath: string;
   skipped: Array<{ sceneId: string; reason: string }>;
   segments: number;
+  /** Artifacts each session scene captured (transcript, recording, ...), kept
+   *  beside the video so later `artifact` scenes can address them (spec §4.3). */
+  sessionArtifacts: Array<{ sceneId: string; kind: string; path: string; label?: string }>;
 }
 
 type Segment =
@@ -87,7 +90,7 @@ function sceneToSteps(scene: Scene2, narration: NarrationDoc, auth: RenderInputs
         narrate,
         scroll: false,
         settleMs: scene.settleMs ?? 4000,
-        session: { kind: scene.sessionKind!, turns: scene.turns ?? [] },
+        session: { id: scene.id, kind: scene.sessionKind!, turns: scene.turns ?? [] },
       },
     ];
   }
@@ -114,6 +117,7 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
   const log = inputs.onProgress ?? ((l: string) => console.log(l));
   const skipped: Array<{ sceneId: string; reason: string }> = [];
   const choreographies: SceneChoreography[] = [];
+  const sessionArtifacts: RenderResult["sessionArtifacts"] = [];
 
   // A product's adapter lives in the product's own repo (spec §1.1), so
   // `spec.adapter` may be a path rather than an already-registered id. Load it
@@ -241,14 +245,20 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
       onSession: async (page, session) => {
         const adapter = findSessionAdapter(session.kind, spec);
         if (!adapter) throw new Error(`no adapter declares session op "${session.kind}"`);
-        const workDir = join(staging, `session-${si}`);
+        // Beside the video, NOT in staging - staging is deleted at the end of
+        // the render, and spec §4.3 requires a session's outputs (transcript,
+        // recording) to survive so later `artifact` scenes can address them.
+        const workDir = join(outDir, "sessions", session.id);
         mkdirSync(workDir, { recursive: true });
         const res = await adapter.execute(
           { op: session.kind, args: { turns: session.turns } },
           { surface: { description: spec.title }, page, workDir, manifest: spec.manifest ?? {} },
         );
         if (!res.ok) throw new Error(res.error ?? `session "${session.kind}" failed`);
-        log(`[studio] session ${session.kind}: ok (${res.artifacts?.length ?? 0} artifact(s))`);
+        for (const a of res.artifacts ?? []) {
+          sessionArtifacts.push({ sceneId: session.id, kind: a.kind, path: a.path, label: a.label });
+        }
+        log(`[studio] session ${session.kind}: ok (${res.artifacts?.length ?? 0} artifact(s) -> ${workDir})`);
       },
     });
     if (result.error) log(`[studio] segment ${si} finished with note: ${result.error}`);
@@ -286,7 +296,7 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
   writeFileSync(choreographyPath, JSON.stringify(choreographies, null, 2));
   rmSync(staging, { recursive: true, force: true });
   log(`[studio] final video: ${inputs.outMp4} (${parts.length} segment(s), ${skipped.length} skipped)`);
-  return { videoPath: inputs.outMp4, choreographyPath, narrationPath, skipped, segments: parts.length };
+  return { videoPath: inputs.outMp4, choreographyPath, narrationPath, skipped, segments: parts.length, sessionArtifacts };
 }
 
 /** Style prompts ride the demo renderer's tts-cmd hook via a tiny inline node

@@ -48,8 +48,10 @@ export interface DemoStep {
 }
 
 /** What a session step asks for. `kind` names an op the caller's adapter
- *  declares; `turns` is the scripted conversation. */
+ *  declares; `turns` is the scripted conversation. `id` identifies the scene so
+ *  the caller can file the session's artifacts under it. */
 export interface SessionRequest {
+  id: string;
   kind: string;
   turns: Array<{ speaker: string; text?: string; bargeIn?: boolean }>;
 }
@@ -291,6 +293,14 @@ async function scrollPage(page: Page, mode: "down" | "tour"): Promise<void> {
  *  as one continuous video, scroll each screen through, mix per-step narration
  *  onto the timeline, and emit a silent twin + timestamped screenplay.
  *  Returns the output MP4 path. Requires ffmpeg + ffprobe. */
+/** Whether this script needs Chromium's fake audio device. A browser voice or
+ *  session UI calls getUserMedia BEFORE it opens its transport, so without this
+ *  the dialog never reaches its socket and the failure surfaces far away as
+ *  "the session never finished" rather than "permission denied". */
+export function needsFakeMedia(script: Pick<DemoScript, "mockWebSockets" | "fakeMicWav" | "steps">): boolean {
+  return Boolean(script.mockWebSockets?.length || script.fakeMicWav || script.steps.some((s) => s.session));
+}
+
 export async function renderProductDemo(script: DemoScript, outPath: string, opts: DemoOptions): Promise<DemoResult> {
   mkdirSync(dirname(outPath), { recursive: true });
   const staging = `${dirname(outPath)}/.demo-${basename(outPath)}-${process.pid}`;
@@ -395,12 +405,16 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
 
   const browser = await chromium.launch({
     headless: false,
-    // WebSocket-mocked browser voice tests call getUserMedia; grant a fake
-    // audio device so the session starts without a real mic. A fakeMicWav
-    // additionally feeds a real capture file as the "microphone" so live call
-    // scenes can speak a prerecorded utterance to the product's voice stack.
+    // Browser voice/session UIs call getUserMedia before they open their
+    // transport; grant a fake audio device so the session starts without a real
+    // mic. A fakeMicWav additionally feeds a real capture file as the
+    // "microphone" so call scenes can speak a prerecorded utterance.
+    //
+    // Session steps need this too: a product's dialog that cannot get a mic
+    // never reaches its socket, and the failure surfaces far away as "the
+    // session never finished" rather than "permission denied".
     args:
-      script.mockWebSockets?.length || script.fakeMicWav
+      needsFakeMedia(script)
         ? [
             "--use-fake-device-for-media-stream",
             "--use-fake-ui-for-media-stream",
