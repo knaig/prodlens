@@ -14,7 +14,15 @@ import type {
   WalkthroughPlan,
 } from "./types.js";
 
-const registry = new Map<string, ProdlensAdapter>();
+// Held on globalThis, not in module scope. A product's adapter imports the SDK
+// by its own path (typically the built dist/ entry), which is a DIFFERENT
+// module instance from the src/ one the runtime loads under tsx. Two instances
+// meant two registries: the adapter registered into one, the renderer looked in
+// the other, and every session scene was skipped as "no adapter declares this
+// op" while the adapter had in fact loaded fine. One registry per process.
+const REGISTRY_KEY = Symbol.for("prodlens.adapters.registry");
+const globals = globalThis as { [REGISTRY_KEY]?: Map<string, ProdlensAdapter> };
+const registry: Map<string, ProdlensAdapter> = (globals[REGISTRY_KEY] ??= new Map());
 
 /** Register an adapter (called at import time by adapters). */
 export function registerAdapter(adapter: ProdlensAdapter): void {

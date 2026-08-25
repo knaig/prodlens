@@ -147,6 +147,23 @@ describe("voicera adapter", { skip: existsSync(ADAPTER) ? false : "voicera check
     }
   });
 
+  test("loading it registers it where the renderer actually looks", async () => {
+    // Regression: the adapter imports the SDK by path (the built dist/ entry),
+    // which is a different module instance from the src/ one the renderer runs
+    // under tsx. When the registry lived in module scope there were two of
+    // them - the adapter registered into one, render.ts searched the other, and
+    // every session scene was skipped as "no adapter declares this op" even
+    // though the adapter had loaded fine. Nothing catches that except this:
+    // execute()-only tests bypass the registry entirely.
+    const { loadExternalAdapter, listAdapters } = await import("./engine.js");
+    await loadExternalAdapter(ADAPTER);
+    const declaring = listAdapters().filter(
+      (a) => a.primitives.some((p) => p.op === "voice-call") || a.sceneTypes.some((s) => s.id === "voice-call"),
+    );
+    assert.equal(declaring.length, 1, "voice-call must resolve to exactly one registered adapter");
+    assert.equal(declaring[0].id, "voicera");
+  });
+
   test("it declares the session op so core can resolve it without naming it", async () => {
     const { voiceraAdapter } = await import(pathToFileURL(ADAPTER).href);
     assert.ok(
