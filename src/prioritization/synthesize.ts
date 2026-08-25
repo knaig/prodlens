@@ -40,9 +40,27 @@ export async function synthesize(graph: GraphVersion, opts: SynthesisOptions = {
   const maxPersonas = opts.maxPersonas ?? 3;
   const maxJourneysPerPersona = opts.maxJourneysPerPersona ?? 2;
 
-  const { personaDrafts, journeys } = isLlmConfigured()
-    ? await synthesizeWithLLM(graph, maxPersonas, maxJourneysPerPersona, opts.model, opts.gepaGuidance)
-    : synthesizeHeuristically(graph, maxJourneysPerPersona);
+  // isLlmConfigured() only says the env vars EXIST - not that the endpoint
+  // answers, the key is live, or the account has credit. A configured-but-
+  // failing LLM used to throw straight out of the pipeline, discarding a
+  // completed crawl because a key had expired. The heuristic path is the same
+  // fallback `full` takes with no LLM at all, so degrade to it and say so
+  // loudly (NFR-6): a worse plan beats losing the run.
+  let synth: Awaited<ReturnType<typeof synthesizeWithLLM>>;
+  if (isLlmConfigured()) {
+    try {
+      synth = await synthesizeWithLLM(graph, maxPersonas, maxJourneysPerPersona, opts.model, opts.gepaGuidance);
+    } catch (e) {
+      console.warn(
+        `[prioritize] LLM synthesis failed, falling back to heuristic journeys: ${e instanceof Error ? e.message : e}`,
+      );
+      console.warn("[prioritize] the plan will be shallower than an LLM-planned one - fix the LLM config and re-run to get the real thing.");
+      synth = synthesizeHeuristically(graph, maxJourneysPerPersona);
+    }
+  } else {
+    synth = synthesizeHeuristically(graph, maxJourneysPerPersona);
+  }
+  const { personaDrafts, journeys } = synth;
 
   const personas: Persona[] = personaDrafts.map((p, i) => ({
     id: `persona-${i}`,
