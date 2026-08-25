@@ -51,6 +51,11 @@ export interface Scene2 {
   // diagram fields
   tier?: "summary" | "tutorial";
   scenario?: string;
+  /** Which v3 view this scene draws: the animated system map, the animated
+   *  sequence, or one of the static views (deployment / activity /
+   *  state-machine). Defaults to `sequence` when a scenario is named and
+   *  `system` otherwise. */
+  view?: "system" | "sequence" | "deployment" | "activity" | "state-machine";
   /** "cast" = humanized components, each speaking in its own voice. */
   mode?: "narrator" | "cast";
   // session / call fields (spec §4.3): transport-agnostic. The scene says WHAT

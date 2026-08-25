@@ -86,7 +86,85 @@ export function narrationState(): { present: boolean; matches: boolean; clips: n
   const t = JSON.parse(readFileSync(tracePath, "utf-8")) as PreparedTrace;
   if (m.traceTitle !== t.title) return { present: true, matches: false, clips: m.items.length, totalSec, reason: `manifest is for "${m.traceTitle}", trace is "${t.title}"` };
   if (m.items.length !== t.events.length) return { present: true, matches: false, clips: m.items.length, totalSec, reason: `manifest has ${m.items.length} clips for ${t.events.length} events` };
+  // Title and count can both match while the words have changed - rewriting
+  // the narration is exactly that case. Comparing the spoken text is what
+  // stops a re-drafted script being played with the previous recording.
+  const changed = t.events.findIndex((e, i) => (e.narration ?? e.label) !== m.items[i]?.text);
+  if (changed >= 0) return { present: true, matches: false, clips: m.items.length, totalSec, reason: `narration text changed at line ${changed + 1}` };
   return { present: true, matches: true, clips: m.items.length, totalSec };
+}
+
+/** Rewrite the prepared trace's narration as something a person would say.
+ *
+ *  The adapter fills each hop with `"<from> to <to>: <action>."` - correct,
+ *  and unlistenable: it reads component names aloud and states the obvious in
+ *  the same shape twelve times running. This drafts an opening that frames
+ *  what the system is and why the flow matters, then one line per hop that
+ *  says what is happening and why, in continuous prose.
+ *
+ *  Grounded in the respec: the model is given the components and their roles
+ *  and told to describe only those, so the narration stays checkably true.
+ *  Returns the opening for the caller to use over the system map. */
+export async function draftTraceNarration(
+  respec: Respec,
+  opts: { register?: string } = {},
+): Promise<{ opening: string; rewritten: number } | undefined> {
+  const tracePath = join(diagramsRoot(), "public", "data", "trace.json");
+  if (!existsSync(tracePath)) return undefined;
+  const { isLlmConfigured, localChat } = await import("../llm/local.js");
+  if (!isLlmConfigured()) return undefined;
+
+  const trace = JSON.parse(readFileSync(tracePath, "utf-8")) as PreparedTrace & { events: Array<{ narration?: string }> };
+  const res = await localChat({
+    system:
+      "You narrate architecture walkthroughs for engineers. You are given a real system and one real flow through it. " +
+      "Write narration that a person would actually say out loud - continuous, plain, and specific. " +
+      "Never say 'X to Y'. Never repeat the same sentence shape twice in a row. " +
+      "Component ids are code identifiers, not names anyone says out loud: turn them into natural English " +
+      "('voice_2_voice_server' becomes 'the voice server', 'ai4bharat_stt_server' becomes 'the Indic speech-to-text server', " +
+      "'voicera_backend' becomes 'the backend'). Introduce a component the first time it appears, then refer to it briefly. " +
+      "This is spoken aloud, so no underscores, no camelCase, no file paths. " +
+      "Describe only what the given components and steps support; invent nothing.",
+    text: [
+      `System: ${respec.oneLiner}`,
+      opts.register ? `Register: ${opts.register}` : "",
+      "",
+      "Components:",
+      ...respec.topology.map((c) => `- ${c.name} (${c.kind}): ${c.role}`),
+      "",
+      `Flow: ${trace.title}`,
+      ...trace.events.map((e, i) => `${i + 1}. ${e.from} -> ${e.to}: ${e.label}`),
+      "",
+      "Write:",
+      "- opening: 2-3 sentences framing what this system is and what this flow shows. Spoken over a diagram of the whole system.",
+      `- hops: exactly ${trace.events.length} lines, one per numbered step above, in order. One or two sentences each.`,
+      "  Say what is happening and why it matters. Vary the phrasing. Refer to components naturally, the way an engineer would in conversation.",
+    ].filter(Boolean).join("\n"),
+    tool: {
+      name: "emit_narration",
+      description: "Emit the spoken narration for this architecture walkthrough.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          opening: { type: "string" },
+          hops: { type: "array", items: { type: "string" }, minItems: trace.events.length, maxItems: trace.events.length },
+        },
+        required: ["opening", "hops"],
+      },
+    },
+    maxTokens: 2400,
+  });
+
+  const out = res.toolInput as { opening?: string; hops?: string[] } | undefined;
+  if (!out?.hops?.length) return undefined;
+  // A short answer is better than a wrong one: keep the mechanical line for any
+  // hop the model did not cover rather than shifting every line by one.
+  trace.events.forEach((e, i) => {
+    const line = out.hops?.[i]?.trim();
+    if (line) e.narration = line;
+  });
+  writeFileSync(tracePath, JSON.stringify(trace, null, 2));
+  return { opening: (out.opening ?? "").trim(), rewritten: Math.min(out.hops.length, trace.events.length) };
 }
 
 /** Synthesize narration for the prepared trace. Skipped when the manifest
@@ -112,6 +190,141 @@ export interface V3SceneResult {
   mp4: string;
   durationSec: number;
   choreography: SceneChoreography;
+}
+
+function ffmpeg(args: string[]): Promise<void> {
+  return new Promise((res, rej) => {
+    execFile("ffmpeg", args, { maxBuffer: 1024 * 1024 * 16 }, (err, _o, stderr) => {
+      if (err) rej(new Error(`ffmpeg failed: ${(stderr || err.message).slice(0, 300)}`));
+      else res();
+    });
+  });
+}
+
+/** The v3 compositions a diagram scene can ask for. `system` is the animated
+ *  map, `sequence` the animated flow; the rest are static views that answer a
+ *  different question about the same respec. */
+export const DIAGRAM_VIEWS = {
+  system: "StructuralReveal",
+  sequence: "SequenceCall",
+  deployment: "DeploymentMap",
+  activity: "ActivityFlow",
+  "state-machine": "StateMachineAggregate",
+} as const;
+export type DiagramView = keyof typeof DIAGRAM_VIEWS;
+
+/** A static view held under one narration line. Deployment, activity and the
+ *  state-machine aggregate have no time axis - the v3 brief is explicit that
+ *  they should not have a camera moved over them to manufacture one - so they
+ *  render as a still and hold for as long as the sentence describing them. */
+export async function renderStillClip(opts: {
+  view: Exclude<DiagramView, "system" | "sequence">;
+  sceneId: string;
+  narrate: string;
+  voice?: import("./types.js").VoiceSpec;
+  outMp4: string;
+  staging: string;
+  silent?: boolean;
+}): Promise<V3SceneResult> {
+  const abs = resolve(opts.outMp4);
+  mkdirSync(opts.staging, { recursive: true });
+  mkdirSync(dirname(abs), { recursive: true });
+
+  const png = join(opts.staging, `${opts.sceneId}.png`);
+  await run(diagramsRoot(), "npx", ["remotion", "still", "src/export/index.ts", DIAGRAM_VIEWS[opts.view], resolve(png), "--log=error"]);
+
+  let durationSec = 6;
+  let wav: string | undefined;
+  if (!opts.silent) {
+    const { synthCast } = await import("./tts.js");
+    const { probeDuration } = await import("../execution/explain.js");
+    wav = join(opts.staging, `${opts.sceneId}.wav`);
+    await synthCast(opts.narrate, opts.voice, wav);
+    durationSec = (await probeDuration(wav).catch(() => 0)) + 0.8;
+  }
+
+  const args = ["-y", "-loop", "1", "-framerate", "30", "-i", png];
+  if (wav) args.push("-i", wav);
+  args.push("-t", String(durationSec), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-vf", "scale=1280:-2",
+    ...(wav ? ["-c:a", "aac", "-shortest"] : ["-an"]), abs);
+  await ffmpeg(args);
+  if (!existsSync(abs)) throw new Error(`ffmpeg reported success but wrote no file: ${abs}`);
+
+  return {
+    mp4: abs,
+    durationSec,
+    choreography: {
+      sceneId: opts.sceneId,
+      durationSec,
+      tracks: {
+        narration: opts.silent ? [] : [{ at: 0, lineId: opts.sceneId, dur: durationSec, text: opts.narrate }],
+        cursor: [], animation: [], camera: [],
+      },
+    },
+  };
+}
+
+/** A still diagram held under one narration line, as a video segment.
+ *
+ *  The animated sequence view answers "what happens when"; an overview answers
+ *  "what is this thing", and needs no motion to do it. Rendering it as a still
+ *  and holding it for the length of its narration costs one image and one TTS
+ *  clip, instead of a full animated encode - which is what makes it affordable
+ *  to alternate architecture with live UI rather than choosing one. */
+export async function renderStructuralClip(opts: {
+  sceneId: string;
+  narrate: string;
+  voice?: import("./types.js").VoiceSpec;
+  outMp4: string;
+  staging: string;
+  silent?: boolean;
+}): Promise<V3SceneResult> {
+  const abs = resolve(opts.outMp4);
+  mkdirSync(opts.staging, { recursive: true });
+  mkdirSync(dirname(abs), { recursive: true });
+
+  // Narration first: its measured length is what the reveal is paced against,
+  // so the map finishes building as the sentence describing it finishes.
+  let durationSec = 6;
+  let wav: string | undefined;
+  if (!opts.silent) {
+    const { synthCast } = await import("./tts.js");
+    const { probeDuration } = await import("../execution/explain.js");
+    wav = join(opts.staging, `${opts.sceneId}.wav`);
+    await synthCast(opts.narrate, opts.voice, wav);
+    durationSec = (await probeDuration(wav).catch(() => 0)) + 0.8; // a breath at the end
+  }
+
+  const silentMp4 = join(opts.staging, `${opts.sceneId}-silent.mp4`);
+  await run(diagramsRoot(), "npx", [
+    "remotion", "render", "src/export/index.ts", "StructuralReveal", resolve(silentMp4),
+    "--props", JSON.stringify({ durationSec }),
+    "--log=error",
+  ]);
+
+  const args = ["-y", "-i", silentMp4];
+  if (wav) args.push("-i", wav);
+  args.push(
+    "-t", String(durationSec),
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-vf", "scale=1280:-2",
+    ...(wav ? ["-c:a", "aac", "-shortest"] : ["-an"]),
+    abs,
+  );
+  await ffmpeg(args);
+  if (!existsSync(abs)) throw new Error(`ffmpeg reported success but wrote no file: ${abs}`);
+
+  return {
+    mp4: abs,
+    durationSec,
+    choreography: {
+      sceneId: opts.sceneId,
+      durationSec,
+      tracks: {
+        narration: opts.silent ? [] : [{ at: 0, lineId: opts.sceneId, dur: durationSec, text: opts.narrate }],
+        cursor: [], animation: [], camera: [],
+      },
+    },
+  };
 }
 
 /** Render the animated sequence diagram for the prepared trace.

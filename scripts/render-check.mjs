@@ -118,7 +118,16 @@ if (existsSync(manifestPath) && reuse) {
   console.log(`  video length      ~${sec.toFixed(0)}s`);
   console.log(`  render wall time  ~${Math.ceil(sec * 1.3)}s (Remotion encode, no live recording)`);
   console.log(`  llm spend         ~$0.0004 (one batched narration draft)`);
-  console.log(`  tts spend         $0.00 (manifest reused)`);
+  // The manifest matching only means it matches the text prepare.ts just
+  // wrote. A studio render re-drafts that narration into spoken prose first,
+  // which changes the words and therefore invalidates these clips - so quoting
+  // $0.00 here would be the estimate lying about the one cost that matters.
+  if (process.env.LLM_API_KEY || process.env.LLM_BASE_URL) {
+    console.log(`  tts spend         ${m.items.length} clip(s) - a studio render re-drafts the narration first, so these clips are re-synthesized`);
+    console.log(`                    (cache absorbs any line whose wording is unchanged)`);
+  } else {
+    console.log(`  tts spend         $0.00 (manifest reused; no LLM configured, so narration is not re-drafted)`);
+  }
 } else if (clipsNeeded) {
   console.log(`  video length      unknown until narration is measured (~${clipsNeeded} clips)`);
   console.log(`  tts spend         ${clipsNeeded} clip(s) on a cold cache`);

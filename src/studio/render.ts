@@ -9,7 +9,7 @@ import { renderProductDemo, type DemoScreenplay, type DemoScript, type DemoStep 
 import { probeDuration } from "../execution/explain.js";
 import type { Respec } from "../respec/respec.js";
 import { renderDiagramScene, renderSequenceScene } from "./diagram.js";
-import { ensureNarration, prepareV3Data, renderSequenceV3, v3Available } from "./diagram-v3.js";
+import { draftTraceNarration, ensureNarration, prepareV3Data, renderSequenceV3, renderStillClip, renderStructuralClip, v3Available } from "./diagram-v3.js";
 import { listAdapters, loadExternalAdapter } from "../adapters/engine.js";
 import "../adapters/session-dom-adapter.js"; // registers the reference session adapter at import time
 import type { ProdlensAdapter } from "../adapters/types.js";
@@ -122,6 +122,8 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
   const skipped: Array<{ sceneId: string; reason: string }> = [];
   const choreographies: SceneChoreography[] = [];
   const sessionArtifacts: RenderResult["sessionArtifacts"] = [];
+  /** Drafted once per render and reused: the spoken opening for the system map. */
+  let v3Opening: string | undefined;
 
   // A product's adapter lives in the product's own repo (spec §1.1), so
   // `spec.adapter` may be a path rather than an already-registered id. Load it
@@ -184,15 +186,55 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
       // (spec §5.4, D-DIAGV3-1).
       const v3 = inputs.diagramRenderer === "legacy" ? { ok: false, reason: "forced legacy" } : v3Available();
       if (v3.ok) {
-        log(`[studio] segment ${si}: diagram v3 (${tier}${scene.scenario ? `, scenario "${scene.scenario}"` : ""})`);
+        log(`[studio] segment ${si}: diagram v3 [${scene.view ?? (scene.scenario ? "sequence" : "system")}]${scene.scenario ? ` scenario "${scene.scenario}"` : ""}`);
         try {
+          const wantsTrace = (scene.view ?? (scene.scenario ? "sequence" : "system")) === "sequence";
           const prep = await prepareV3Data(inputs.respec!, scene.scenario);
           log(`[studio]   projected respec: ${prep.nodes} nodes, ${prep.edges} edges, ${prep.events} flow events`);
-          if (!inputs.draft) {
+          // Only the sequence view speaks the trace. The map and the static
+          // views carry a single line of their own, so drafting and
+          // synthesizing twelve hop clips for them is pure waste - and it was:
+          // a spec with three diagram scenes paid for the trace narration
+          // three times, once per scene, at different scenarios.
+          if (!inputs.draft && wantsTrace) {
+            // Rewrite the adapter's "<from> to <to>: <action>" placeholders as
+            // spoken prose before anything is synthesized. Done once per
+            // render: the opening frames the system over the map, the hops
+            // narrate the sequence.
+            if (v3Opening === undefined) {
+              const drafted = await draftTraceNarration(inputs.respec!, { register: audienceById(spec.audience)?.register });
+              v3Opening = drafted?.opening ?? "";
+              if (drafted) log(`[studio]   narration drafted: opening + ${drafted.rewritten} hop line(s)`);
+              else log("[studio]   narration not drafted (no LLM configured) - hops keep their mechanical text");
+            }
             const n = await ensureNarration();
             log(`[studio]   narration: ${n.ran ? "synthesized" : "reused"} ${n.clips} clip(s), ${n.totalSec.toFixed(1)}s`);
           }
-          const res = await renderSequenceV3({ sceneId: scene.id, outMp4: join(staging, `seg-${si}.mp4`) });
+          // A scene naming a scenario wants the animated sequence ("what
+          // happens when"); one without wants the system map ("what is this"),
+          // which needs no motion and costs a still plus one narration line.
+          const view = scene.view ?? (scene.scenario ? "sequence" : "system");
+          const staticView = view !== "system" && view !== "sequence";
+          const res = view === "sequence"
+            ? await renderSequenceV3({ sceneId: scene.id, outMp4: join(staging, `seg-${si}.mp4`) })
+            : staticView
+            ? await renderStillClip({
+                view,
+                sceneId: scene.id,
+                narrate: lineFor(narration, scene) ?? `${view} view of ${spec.title}.`,
+                voice: inputs.draft ? undefined : spec.voice,
+                outMp4: join(staging, `seg-${si}.mp4`),
+                staging: join(staging, `dgv3-${si}`),
+                silent: inputs.draft,
+              })
+            : await renderStructuralClip({
+                sceneId: scene.id,
+                narrate: v3Opening || lineFor(narration, scene) || `An overview of ${spec.title}.`,
+                voice: inputs.draft ? undefined : spec.voice,
+                outMp4: join(staging, `seg-${si}.mp4`),
+                staging: join(staging, `dgv3-${si}`),
+                silent: inputs.draft,
+              });
           choreographies.push(res.choreography);
           parts.push(res.mp4);
           continue;
@@ -282,8 +324,28 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
         // recording) to survive so later `artifact` scenes can address them.
         const workDir = join(outDir, "sessions", session.id);
         mkdirSync(workDir, { recursive: true });
+        // Give each spoken turn real audio. Without it a "call" is a scripted
+        // transcript with no voice in it - the frames move, the dialog renders
+        // the lines, and nothing is ever said. Core only synthesizes and
+        // attaches the clip; what a session does with it (play it back, feed a
+        // fake mic, ignore it) is the adapter's business.
+        const turns = session.turns;
+        if (!inputs.draft) {
+          const { synthCast } = await import("./tts.js");
+          for (const [i, turn] of turns.entries()) {
+            if (!turn.text) continue;
+            const wav = join(workDir, `turn-${i}.wav`);
+            try {
+              await synthCast(turn.text, spec.voice, wav);
+              (turn as { audio?: string }).audio = wav;
+            } catch (e) {
+              log(`[studio]   turn ${i + 1} audio failed, continuing without it: ${e instanceof Error ? e.message : e}`);
+            }
+          }
+          log(`[studio]   session audio: ${turns.filter((t) => (t as { audio?: string }).audio).length}/${turns.length} turn(s) voiced`);
+        }
         const res = await adapter.execute(
-          { op: session.kind, args: { turns: session.turns } },
+          { op: session.kind, args: { turns } },
           { surface: { description: spec.title }, page, workDir, manifest: spec.manifest ?? {} },
         );
         if (!res.ok) throw new Error(res.error ?? `session "${session.kind}" failed`);
@@ -375,8 +437,17 @@ require("node:fs").writeFileSync(o, Buffer.concat([h, pcm]));
 async function concatMp4(parts: string[], outPath: string): Promise<void> {
   const inputs = parts.flatMap((p) => ["-i", p]);
   const n = parts.length;
+  // concat demands identical dimensions on every input, and the segments do
+  // NOT share an aspect ratio: a browser scene is the viewport (1280x800),
+  // while a diagram renders 16:9 (1280x720 after scaling). `scale=1280:-2`
+  // preserves each one's own aspect, so mixing the two failed the whole
+  // concat with "parameters do not match" - which is exactly what happens the
+  // first time a spec alternates architecture with live UI. Fit each segment
+  // inside one canvas and pad the remainder instead of stretching it.
+  const W = 1280, H = 800;
+  const fit = `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black`;
   const filter =
-    parts.map((_, i) => `[${i}:v]scale=1280:-2,setsar=1,fps=30,format=yuv420p[v${i}];[${i}:a]aresample=48000,aformat=channel_layouts=stereo[a${i}];`).join("") +
+    parts.map((_, i) => `[${i}:v]${fit},setsar=1,fps=30,format=yuv420p[v${i}];[${i}:a]aresample=48000,aformat=channel_layouts=stereo[a${i}];`).join("") +
     parts.map((_, i) => `[v${i}][a${i}]`).join("") +
     `concat=n=${n}:v=1:a=1[v][a]`;
   await ffmpeg(["-y", ...inputs, "-filter_complex", filter, "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", outPath]);

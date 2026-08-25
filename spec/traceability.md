@@ -186,11 +186,11 @@ Defined in v2 §5.4. Built as a separate workspace in `diagrams/`
 
 | renderer | status |
 | --- | --- |
-| structural (static system map) | partial - the build order's first item |
-| sequence (one run's messages) | partial |
+| structural (static system map) | implemented - real respec topology, elk layout |
+| sequence (one run's messages) | implemented - real respec flow, narrated |
 | state-machine (aggregate over runs) | not-started - needs many traces |
 | deployment (nested containers, trust boundary) | not-started |
-| activity / flowchart (pipeline stages + gates) | not-started |
+| activity / flowchart (pipeline stages) | implemented - a respec flow as ordered stages, wrapped to stay legible |
 
 **Integration gap D-DIAGV3-1:** `diagrams/` is not wired into the studio
 pipeline. `src/studio/diagram.ts` renders its own animated SVG; the v3

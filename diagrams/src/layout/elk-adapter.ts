@@ -3,7 +3,7 @@
 // Chromium runtime) - this is what kills the truncation bug. Never hand-place
 // coordinates.
 import ELK from "elkjs/lib/elk.bundled.js";
-import type { StaticGraph } from "../schema";
+import type { StaticEdge, StaticGraph } from "../schema";
 
 export interface PositionedNode {
   id: string;
@@ -20,9 +20,28 @@ export interface PositionedEdge {
   from: string;
   to: string;
   label?: string;
+  kind?: StaticEdge["kind"];
   /** Polyline points from elk routing. */
   points: Array<{ x: number; y: number }>;
 }
+/** Point at the midpoint of the polyline's arc length - sits on the actual
+ * routed path (which bends under ORTHOGONAL routing), unlike averaging the
+ * two endpoints which can land off the line or inside an unrelated box. */
+export function arcMidpoint(points: Array<{ x: number; y: number }>): { x: number; y: number } {
+  const segLens = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y));
+  const total = segLens.reduce((a, b) => a + b, 0);
+  let remaining = total / 2;
+  for (let i = 0; i < segLens.length; i++) {
+    if (remaining <= segLens[i]) {
+      const t = segLens[i] === 0 ? 0 : remaining / segLens[i];
+      const a = points[i], b = points[i + 1];
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    remaining -= segLens[i];
+  }
+  return points[points.length - 1];
+}
+
 export interface Layout {
   nodes: PositionedNode[];
   edges: PositionedEdge[];
@@ -47,7 +66,18 @@ function measure(text: string, font: string): number {
   return text.length * size * 0.56;
 }
 
-export async function layoutGraph(graph: StaticGraph, opts: { direction?: "RIGHT" | "DOWN" } = {}): Promise<Layout> {
+/** Leaf boxes reserve this much left padding for a kind icon (Structural.tsx
+ * draws it at x+14); container boxes show no icon so skip the reserve. */
+export const ICON_RESERVE = 24;
+
+export async function layoutGraph(
+  graph: StaticGraph,
+  /** `wrap` folds a long single-file chain into several rows instead of one
+   *  very tall column. Without it a 12-stage pipeline lays out taller than the
+   *  canvas, the renderer scales the whole thing down to fit, and the labels
+   *  become unreadable - the diagram is technically correct and useless. */
+  opts: { direction?: "RIGHT" | "DOWN"; wrap?: boolean } = {},
+): Promise<Layout> {
   const elk = new ELK();
   const PAD_X = 28, PAD_Y = 20;
   interface ElkChild {
@@ -56,14 +86,15 @@ export async function layoutGraph(graph: StaticGraph, opts: { direction?: "RIGHT
   }
   const childrenOf = (parent?: string): ElkChild[] =>
     graph.nodes.filter((n) => n.parent === parent).map((n) => {
-      const w = Math.max(measure(n.label, FONT_LABEL), n.sublabel ? measure(n.sublabel, FONT_SUB) : 0) + PAD_X * 2;
+      const isLeaf = childrenOf(n.id).length === 0;
+      const w = Math.max(measure(n.label, FONT_LABEL), n.sublabel ? measure(n.sublabel, FONT_SUB) : 0) + PAD_X * 2 + (isLeaf ? ICON_RESERVE : 0);
       const h = (n.sublabel ? 58 : 44) + PAD_Y;
       return {
         id: n.id,
         width: Math.max(120, Math.ceil(w)),
         height: h,
         children: childrenOf(n.id),
-        layoutOptions: childrenOf(n.id).length ? { "elk.padding": "[top=36,left=16,bottom=16,right=16]" } : undefined,
+        layoutOptions: isLeaf ? undefined : { "elk.padding": "[top=36,left=16,bottom=16,right=16]" },
       };
     });
 
@@ -72,9 +103,17 @@ export async function layoutGraph(graph: StaticGraph, opts: { direction?: "RIGHT
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": opts.direction ?? "RIGHT",
+      "elk.hierarchyHandling": "INCLUDE_CHILDREN",
       "elk.spacing.nodeNode": "36",
       "elk.layered.spacing.nodeNodeBetweenLayers": "72",
       "elk.edgeRouting": "ORTHOGONAL",
+      ...(opts.wrap
+        ? {
+            "elk.layered.wrapping.strategy": "MULTI_EDGE",
+            // Roughly the canvas: keeps the wrapped block inside 1920x940.
+            "elk.aspectRatio": "2.0",
+          }
+        : {}),
     },
     children: childrenOf(undefined),
     edges: graph.edges.map((e, i) => ({ id: `e${i}`, sources: [e.from], targets: [e.to] })),
@@ -105,7 +144,7 @@ export async function layoutGraph(graph: StaticGraph, opts: { direction?: "RIGHT
             { x: b.x, y: b.y + b.height / 2 },
           ];
         })();
-    return { from: e.from, to: e.to, label: e.label, points };
+    return { from: e.from, to: e.to, label: e.label, kind: e.kind, points };
   });
 
   const width = Math.max(...nodes.map((n) => n.x + n.width), 400) + 40;
