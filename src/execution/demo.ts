@@ -163,6 +163,11 @@ export interface DemoOptions {
    *  the video is the actual OS cursor. Requires the app window to stay
    *  frontmost during recording. */
   osCursor?: boolean;
+  /** Stable identity for `ttsCmd`, used as its cache key. A generated
+   *  command (see studio/render.ts styledTtsCmd) changes shape whenever the
+   *  generator does; this names what the command MEANS so cached clips
+   *  survive, and so a pre-render estimate can predict cache hits. */
+  ttsCmdKey?: string;
   /** Runs a DemoStep.session against the live recording page. Supplied by the
    *  caller (studio/render.ts routes it to the product's adapter) so this
    *  renderer never learns a product's transport. Throwing skips the step the
@@ -333,6 +338,7 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
 
   const voice = opts.voice ?? script.voice ?? process.env.GEMINI_API_KEY ? "Kore" : "Samantha";
   const ttsCmd = opts.ttsCmd ?? "";
+  const ttsCmdKey = opts.ttsCmdKey;
 
   // Pre-synthesize ALL scripted narration (and the intro line) before the
   // recording starts. TTS latency never enters the recorded timeline this way:
@@ -348,7 +354,7 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
   const preSynthDur: number[] = new Array(script.steps.length).fill(0);
   let introDurSec = 0;
   if (introFile && script.intro?.narrate) {
-    await synthNarration(script.intro.narrate, voice, 180, ttsCmd, introFile).catch(() => null);
+    await synthNarration(script.intro.narrate, voice, 180, ttsCmd, introFile, ttsCmdKey).catch(() => null);
     if (existsSync(introFile)) introDurSec = await probeDuration(introFile).catch(() => 0);
   }
   for (let i = 0; i < script.steps.length; i++) {
@@ -359,7 +365,7 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
     // than a slightly slower one. Only give up permanently on persistent errors.
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        await synthNarration(script.steps[i].narrate!, voice, 180, ttsCmd, preSynth[i]!);
+        await synthNarration(script.steps[i].narrate!, voice, 180, ttsCmd, preSynth[i]!, ttsCmdKey);
         break;
       } catch (e) {
         if (attempt === 3) {
@@ -377,7 +383,7 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
   const outroFile = script.outro?.narrate ? join(preSynthDir, "narr-outro.wav") : undefined;
   let outroDurSec = 0;
   if (outroFile) {
-    await synthNarration(script.outro!.narrate!, voice, 180, ttsCmd, outroFile).catch(() => null);
+    await synthNarration(script.outro!.narrate!, voice, 180, ttsCmd, outroFile, ttsCmdKey).catch(() => null);
     if (existsSync(outroFile)) outroDurSec = await probeDuration(outroFile).catch(() => 0);
   }
 
@@ -395,7 +401,7 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
             mock.script.map(async (ev, ei) => {
               if (ev.narrate) {
                 const file = join(preSynthDir, `snarr-${mi}-${ei}.wav`);
-                await synthNarration(ev.narrate, voice, 180, ttsCmd, file).catch(() => null);
+                await synthNarration(ev.narrate, voice, 180, ttsCmd, file, ttsCmdKey).catch(() => null);
                 if (!existsSync(file)) return undefined;
                 return { file, durSec: await probeDuration(file).catch(() => 0) };
               }
@@ -404,7 +410,7 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
               let ok = false;
               for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
                 try {
-                  await synthNarration(String(ev.message.content), ev.speakVoice ?? voice, 180, ttsCmd, file);
+                  await synthNarration(String(ev.message.content), ev.speakVoice ?? voice, 180, ttsCmd, file, ttsCmdKey);
                   ok = true;
                 } catch (e) {
                   if (attempt === 3) console.warn(`Conversation line synthesis failed for mock ${mi} event ${ei}: ${e instanceof Error ? e.message : String(e)}`);
@@ -692,7 +698,7 @@ export async function renderProductDemo(script: DemoScript, outPath: string, opt
           narrate = await describeScreen(shot, step.name, llmBase, llmModel);
           if (narrate) {
             audioFile = join(staging, `narr-${String(i).padStart(3, "0")}.wav`);
-            await synthNarration(narrate, voice, 180, ttsCmd, audioFile).catch(() => {
+            await synthNarration(narrate, voice, 180, ttsCmd, audioFile, ttsCmdKey).catch(() => {
               audioFile = undefined;
             });
             if (audioFile && existsSync(audioFile)) clipDurSec = await probeDuration(audioFile).catch(() => 0);
@@ -1086,7 +1092,7 @@ async function runGuidedSession(
     let clipDurSec = 0;
     if (step.narrate) {
       const audioOut = join(staging, `narr-${String(stepsRun).padStart(3, "0")}.wav`);
-      await synthNarration(step.narrate, voice, 180, ttsCmd, audioOut).catch(() => null);
+      await synthNarration(step.narrate, voice, 180, ttsCmd, audioOut, opts.ttsCmdKey).catch(() => null);
       if (existsSync(audioOut)) clipDurSec = await probeDuration(audioOut).catch(() => 0);
       const narrateAtSec = Math.max(screenReadySec, cursorSec);
       const remainingBefore = narrateAtSec - (Date.now() - t0) / 1000;

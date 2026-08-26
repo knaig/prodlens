@@ -90,8 +90,8 @@ async function writeCursorSprite(dir: string, scale = 2.0): Promise<string> {
 /** Synthesize narration text to an audio file (returns the path). Uses the
  *  same backend as the explainer: --tts-cmd, then Gemini TTS when
  *  GEMINI_API_KEY is set, then macOS say. */
-export async function synthNarration(text: string, voice: string, rate: number, ttsCmd: string, outPath: string): Promise<string> {
-  return synthTts(text, voice, rate, ttsCmd, outPath);
+export async function synthNarration(text: string, voice: string, rate: number, ttsCmd: string, outPath: string, ttsCmdKey?: string): Promise<string> {
+  return synthTts(text, voice, rate, ttsCmd, outPath, ttsCmdKey);
 }
 
 /** Duration (seconds) of an audio/video file via ffprobe. */
@@ -160,12 +160,20 @@ export async function renderNarratedVideo(scenes: ExplainScene[], outPath: strin
  *  4. macOS `say`
  *  TTS_BACKEND=gemini|kokoro|say pins a backend (auto = all in order).
  *  Writes .wav (Gemini/Kokoro) or .aiff (say). */
-async function synthTts(text: string, voice: string, rate: number, ttsCmd: string, outPath: string): Promise<string> {
+async function synthTts(text: string, voice: string, rate: number, ttsCmd: string, outPath: string, ttsCmdKey?: string): Promise<string> {
   const backend = (process.env.TTS_BACKEND || "auto").toLowerCase();
   // Content-hash cache: identical (backend, ttsCmd, voice, rate, text) reuses
   // the clip - re-rendering a video with unchanged narration lines stops
   // burning TTS quota on the same audio every time.
-  const cacheKey = createHash("sha1").update(`${backend}|${ttsCmd}|${voice}|${rate}|${text}`).digest("hex");
+  // Key on what DETERMINES the audio, not on the command string that happens
+  // to produce it. A styled voice's tts-cmd is generated per render - a whole
+  // JS program base64'd into a shell line - so hashing it made the cache state
+  // impossible to predict without re-running that generator, and any edit to
+  // it would silently invalidate every cached clip. `ttsCmdKey` is the stable
+  // identity the caller supplies instead (e.g. "styled:Kore:Indian English").
+  // A hand-written --tts-cmd has no such identity, so it still keys on itself.
+  const cmdIdentity = ttsCmdKey ?? ttsCmd;
+  const cacheKey = createHash("sha1").update(`${backend}|${cmdIdentity}|${voice}|${rate}|${text}`).digest("hex");
   const cached = join(ttsCacheDir(), cacheKey);
   if (existsSync(cached)) {
     copyFileSync(cached, outPath);

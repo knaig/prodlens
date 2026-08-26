@@ -8,11 +8,12 @@
 // and reports the TTS clips each one needs, split by whether the cache already
 // holds them.
 //
-// Exact for clips that go through synthCast (diagram narration, session
-// turns), because that key is reproducible here. Browser-scene narration runs
-// through the demo renderer's own chain, whose key includes the generated
-// tts-cmd, so those are counted but not cache-probed - stated as such rather
-// than guessed at.
+// Both TTS paths key on stable inputs, so both are cache-probed exactly. The
+// browser path used to hash its generated tts-cmd, which no estimator could
+// reproduce without re-running that generator; it now hashes a `ttsCmdKey`
+// naming what the command means, which is the same thing synthCast keys on.
+// `unknown` therefore stays empty in practice, and remains in the output for
+// the one case that is genuinely unpredictable: a hand-written --tts-cmd.
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -45,6 +46,17 @@ function castCached(text: string, voice: VoiceSpec | undefined): boolean {
   const name = voice?.name ?? "Kore";
   const key = createHash("sha1").update(`${name}|${voice?.style ?? ""}|${text}`).digest("hex");
   return existsSync(join(ttsCacheDir(), `${key}.wav`));
+}
+
+/** The synthTts cache key - kept in step with src/execution/explain.ts.
+ *  Predictable only because that path now keys on `ttsCmdKey`, a stable
+ *  identity, rather than on the generated tts-cmd string. */
+function browserCached(text: string, voice: VoiceSpec | undefined): boolean {
+  const name = voice?.name ?? "Kore";
+  const backend = (process.env.TTS_BACKEND || "auto").toLowerCase();
+  const cmdIdentity = voice?.style ? `styled:${name}:${voice.style}` : "";
+  const key = createHash("sha1").update(`${backend}|${cmdIdentity}|${name}|180|${text}`).digest("hex");
+  return existsSync(join(ttsCacheDir(), key)); // synthTts stores without an extension
 }
 
 function viewOf(scene: Scene2): string {
@@ -110,7 +122,7 @@ export function estimateSpec(
       sceneId: scene.id,
       kind: scene.type,
       clips: text ? 1 : 0,
-      note: text ? "browser narration - cache state not probeable here" : "silent",
+      cached: text && browserCached(text, spec.voice) ? 1 : 0,
     });
   }
 

@@ -75,12 +75,13 @@ describe("spend plan", () => {
     assert.ok(e.scenes.every((s) => s.clips === 0));
   });
 
-  test("separates what is cached from what is not knowable here", () => {
-    // Browser narration goes through the demo renderer's own TTS chain, whose
-    // key includes a generated tts-cmd. Counting it as cached would be a guess.
+  test("browser narration is cache-probed, not guessed at", () => {
+    // It used to be unpredictable: synthTts hashed the generated tts-cmd, which
+    // no estimator could reproduce. Both paths now key on stable inputs, so an
+    // unspoken line is reported as a real cost rather than as "unknown".
     const spec: DemoSpec2 = { ...base, scenes: [{ id: "screen1", type: "screen", goto: "/", narrationIds: ["a"] }] };
     const e = estimateSpec(spec, narration);
-    assert.equal(e.unknownClips, 1);
-    assert.equal(e.newClips, 0);
+    assert.equal(e.unknownClips, 0, "no clip should be unpredictable now");
+    assert.equal(e.newClips, 1, "an unspoken line costs one synthesis");
   });
 });

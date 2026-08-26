@@ -323,6 +323,11 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
       noVoice: inputs.draft ?? false,
       noCaptions: false,
       ttsCmd: spec.voice?.style ? styledTtsCmd(spec.voice.name ?? "Kore", spec.voice.style) : undefined,
+      // What that generated command means, as its cache identity - see
+      // DemoOptions.ttsCmdKey. Same shape synthCast keys on, so both TTS paths
+      // now hash the same stable inputs and a pre-render estimate can predict
+      // either one.
+      ttsCmdKey: spec.voice?.style ? `styled:${spec.voice.name ?? "Kore"}:${spec.voice.style}` : undefined,
       // The session bridge (spec §4.3): the renderer hands us the live page,
       // we hand it to the adapter that declared this op. Artifacts the session
       // captures (recording, transcript) land in the scene's work dir, where
