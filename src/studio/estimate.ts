@@ -18,6 +18,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { ttsCacheDir } from "../llm/tts-cache.js";
+import { voiceForSpeaker } from "./tts.js";
 import type { DemoSpec2, NarrationDoc, Scene2, VoiceSpec } from "./types.js";
 
 export interface SceneCost {
@@ -112,7 +113,10 @@ export function estimateSpec(
 
     if (scene.type === "call") {
       const spoken = (scene.turns ?? []).filter((t) => t.text);
-      const cached = spoken.filter((t) => castCached(t.text!, spec.voice)).length;
+      // Each speaker is synthesized in its own voice, so probe with that voice
+      // - checking them all against the cast voice would report hits for clips
+      // that will actually be synthesized.
+      const cached = spoken.filter((t) => castCached(t.text!, voiceForSpeaker(t.speaker, spec.voice))).length;
       scenes.push({ sceneId: scene.id, kind: "call", clips: spoken.length, cached, note: `${spoken.length} spoken turn(s)` });
       continue;
     }

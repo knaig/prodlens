@@ -347,12 +347,15 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
         // fake mic, ignore it) is the adapter's business.
         const turns = session.turns;
         if (!inputs.draft) {
-          const { synthCast } = await import("./tts.js");
+          const { synthCast, voiceForSpeaker } = await import("./tts.js");
           for (const [i, turn] of turns.entries()) {
             if (!turn.text) continue;
             const wav = join(workDir, `turn-${i}.wav`);
             try {
-              await synthCast(turn.text, spec.voice, wav);
+              // Each speaker gets its own voice. Synthesizing every turn with
+              // the spec's single cast voice made a two-party call come out
+              // sounding like one person reading both halves.
+              await synthCast(turn.text, voiceForSpeaker(turn.speaker, spec.voice), wav);
               (turn as { audio?: string }).audio = wav;
             } catch (e) {
               log(`[studio]   turn ${i + 1} audio failed, continuing without it: ${e instanceof Error ? e.message : e}`);

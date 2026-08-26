@@ -13,6 +13,26 @@ import type { VoiceSpec } from "./types.js";
 const GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview";
 
 
+/** Voices for the non-primary speakers in a session. The primary voice stays
+ *  whatever the spec cast; everyone else gets a distinct one so a two-party
+ *  conversation does not come out in a single voice. */
+const SESSION_VOICES = ["Puck", "Aoede", "Charon", "Leda", "Fenrir", "Zephyr"];
+
+/** A voice for one speaker in a conversation, keeping the spec's accent and
+ *  style so only the timbre changes. The agent (or assistant) keeps the cast
+ *  voice; every other speaker is assigned a stable alternative by name, so the
+ *  same caller sounds the same across renders and across scenes. */
+export function voiceForSpeaker(speaker: string, base: VoiceSpec | undefined): VoiceSpec {
+  const s = speaker.toLowerCase();
+  if (s === "agent" || s === "assistant" || s === "narrator") return base ?? {};
+  let h = 0;
+  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const name = SESSION_VOICES[h % SESSION_VOICES.length];
+  // A different speaker, not a different production: the accent and delivery
+  // instruction carry over so the two voices belong in the same recording.
+  return { ...base, name };
+}
+
 export async function synthCast(text: string, voice: VoiceSpec | undefined, outPath: string): Promise<string> {
   const name = voice?.name ?? "Kore";
   // Content-hash cache: identical (text, voice, style) reuses the clip -

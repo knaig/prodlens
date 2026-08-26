@@ -84,4 +84,21 @@ describe("spend plan", () => {
     assert.equal(e.unknownClips, 0, "no clip should be unpredictable now");
     assert.equal(e.newClips, 1, "an unspoken line costs one synthesis");
   });
+
+  test("a two-party call is voiced by two voices", () => {
+    // Synthesizing every turn with the spec's cast voice made a conversation
+    // come out as one person reading both halves.
+    const spec: DemoSpec2 = {
+      ...base,
+      scenes: [{
+        id: "call", type: "call", sessionKind: "voice-call",
+        turns: [{ speaker: "agent", text: "same words" }, { speaker: "caller", text: "same words" }],
+      }],
+    };
+    // Identical text, different speakers: if both keyed on one voice they would
+    // share a cache entry, so the plan would claim a hit that never happens.
+    const e = estimateSpec(spec, narration);
+    assert.equal(e.scenes[0].clips, 2);
+    assert.equal(e.scenes[0].cached, 0, "different speakers must not share a cached clip");
+  });
 });
