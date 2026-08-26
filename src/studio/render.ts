@@ -13,6 +13,7 @@ import { draftTraceNarration, ensureNarration, prepareV3Data, renderSequenceV3, 
 import { listAdapters, loadExternalAdapter } from "../adapters/engine.js";
 import "../adapters/session-dom-adapter.js"; // registers the reference session adapter at import time
 import type { ProdlensAdapter } from "../adapters/types.js";
+import { estimateSpec, formatEstimate } from "./estimate.js";
 import { audienceById, type DemoSpec2, type NarrationDoc, type Scene2, type SceneChoreography } from "./types.js";
 import { spawn } from "node:child_process";
 
@@ -124,6 +125,16 @@ export async function renderSpec(inputs: RenderInputs): Promise<RenderResult> {
   const sessionArtifacts: RenderResult["sessionArtifacts"] = [];
   /** Drafted once per render and reused: the spoken opening for the system map. */
   let v3Opening: string | undefined;
+
+  // What this render will cost, before it costs it. A surprising number here
+  // is the cheapest moment to stop - after this point the spending starts.
+  const estimate = estimateSpec(spec, narration, {
+    draft: inputs.draft,
+    traceEvents: inputs.respec?.flows?.find((f) => f.name === spec.scenes.find((s) => s.scenario)?.scenario)?.steps.length
+      ?? inputs.respec?.flows?.[0]?.steps.length,
+  });
+  log("[studio] spend plan:");
+  for (const line of formatEstimate(estimate)) log(line);
 
   // A product's adapter lives in the product's own repo (spec §1.1), so
   // `spec.adapter` may be a path rather than an already-registered id. Load it

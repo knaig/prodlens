@@ -278,6 +278,8 @@ Modules carrying a spec anchor in their header comment. This is the
 | `src/studio/diagram-v3.ts` | v2 §5.4 (D-DIAGV3-1) |
 | `src/studio/diagram-v3.test.ts` | v2 §5.4 |
 | `scripts/render-check.mjs` | v2 §5.4, §12.2 |
+| `src/studio/estimate.ts` | v2 §12.2 |
+| `src/studio/estimate.test.ts` | v2 §12.2 |
 | `src/graph/analysis.ts` | `FR-VE-4`, `FR-GE-3` |
 | `src/graph/graph-store.ts` | `FR-GE-1`, `FR-GE-2`, `FR-GE-3` |
 | `src/graph/route-match.ts` | `FR-GE-2` |

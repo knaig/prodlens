@@ -161,6 +161,12 @@ ladder instead, cheapest rung first, and stop at the first one that fails.
 | 4 | smoke | `npm run diagram:smoke` | ~2s | motion and audio wiring, over a 3-second frame slice |
 | 5 | full render | `npm run diagram:render` | minutes + spend | the deliverable |
 
+Rung 2.5, automatic: every `renderSpec` prints a **spend plan** before it does
+any work - one line per scene, with the TTS clips it needs split into cached
+and to-be-synthesized, and a warning when a spec would pay for the same trace
+narration more than once. That case cost real money before it existed, and the
+only evidence was a line in the render log after the fact.
+
 Rungs 2-4 exist because the failures they catch are the ones that used to be
 found only after paying for a full render: a stale narration manifest, a
 respec that projects to orphan nodes, a renderer that reports success and
